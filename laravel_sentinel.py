@@ -1694,6 +1694,221 @@ def browse(path):
                 laravel=os.path.isfile(os.path.join(p, "artisan")) or os.path.isfile(os.path.join(p, "composer.json")))
 
 
+
+# ----------------------------------------------------------------------------------------------
+# Agentic AI & Safety Snapshot Engine
+# ----------------------------------------------------------------------------------------------
+def create_backup_snapshot(root, files_to_backup, action_name="ai_remediation"):
+    timestamp = int(time.time())
+    snap_id = "snap_%d" % timestamp
+    backup_dir = os.path.join(root, ".sentinel_backups", snap_id)
+    os.makedirs(backup_dir, exist_ok=True)
+    manifest = {
+        "id": snap_id,
+        "timestamp": timestamp,
+        "date": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp)),
+        "action": action_name,
+        "files": []
+    }
+    for rel in files_to_backup:
+        full = os.path.join(root, rel)
+        if not os.path.isfile(full):
+            continue
+        rel_clean = rel.replace("/", "_").replace("\\", "_")
+        bak_dest = os.path.join(backup_dir, rel_clean + ".bak")
+        shutil.copy2(full, bak_dest)
+        with open(full, "rb") as f:
+            h = hashlib.sha256(f.read()).hexdigest()
+        manifest["files"].append({
+            "original_path": rel,
+            "backup_file": rel_clean + ".bak",
+            "sha256": h,
+            "mode": oct(os.stat(full).st_mode & 0o777)
+        })
+    with open(os.path.join(backup_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
+def rollback_snapshot(root, snap_id):
+    backup_dir = os.path.join(root, ".sentinel_backups", snap_id)
+    manifest_file = os.path.join(backup_dir, "manifest.json")
+    if not os.path.isfile(manifest_file):
+        raise ValueError("Snapshot not found: %s" % snap_id)
+    with open(manifest_file, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+    restored = 0
+    errors = []
+    for item in manifest.get("files", []):
+        bak = os.path.join(backup_dir, item["backup_file"])
+        orig = os.path.join(root, item["original_path"])
+        if not os.path.isfile(bak):
+            errors.append("Missing backup: %s" % item["backup_file"])
+            continue
+        try:
+            os.makedirs(os.path.dirname(orig), exist_ok=True)
+            shutil.copy2(bak, orig)
+            restored += 1
+        except Exception as e:
+            errors.append("%s: %s" % (item["original_path"], e))
+    return {"ok": True, "restored": restored, "errors": errors, "id": snap_id}
+
+
+def list_backup_snapshots(root):
+    if not root:
+        return []
+    base = os.path.join(root, ".sentinel_backups")
+    if not os.path.isdir(base):
+        return []
+    snaps = []
+    try:
+        for d in sorted(os.listdir(base), reverse=True):
+            mpath = os.path.join(base, d, "manifest.json")
+            if os.path.isfile(mpath):
+                try:
+                    with open(mpath, "r", encoding="utf-8") as f:
+                        snaps.append(json.load(f))
+                except Exception:
+                    pass
+    except OSError:
+        pass
+    return snaps
+
+
+def ai_analyze_file(root, rel_path, file_obj=None, provider="auto", api_key=""):
+    """Analyze a single file finding and propose a safe remediation opportunity."""
+    key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+    prov = provider
+    if prov == "auto":
+        if os.getenv("GEMINI_API_KEY") or (api_key and api_key.startswith("AIza")):
+            prov = "gemini"
+        elif os.getenv("OPENAI_API_KEY") or (api_key and api_key.startswith("sk-")):
+            prov = "openai"
+        else:
+            prov = "heuristic"
+
+    # Default heuristic analysis
+    cats = file_obj.get("cats", []) if file_obj else []
+    findings = file_obj.get("findings", []) if file_obj else []
+    top_title = findings[0]["title"] if findings else "Suspicious Code"
+    snippet = findings[0].get("snippet", "") if findings else ""
+
+    action = "quarantine"
+    verdict = "CONFIRMED_MALWARE"
+    explanation = "This file contains suspicious patterns characteristic of PHP backdoors, webshells, or droppers."
+    diff_text = ""
+    fixed_code = ""
+
+    # Rule-based heuristics tailored to Laravel
+    if any(c in ("polyglot", "image") for c in cats) or "image/png" in top_title.lower() or "webp" in rel_path.lower():
+        verdict = "CONFIRMED_MALWARE"
+        action = "quarantine"
+        explanation = "PHP webshell concealed inside an image polyglot or uploaded media file in storage/public directory."
+    elif "halt_compiler" in snippet or "cjfuns.php" in rel_path or "Lock" in snippet:
+        verdict = "CONFIRMED_MALWARE"
+        action = "quarantine"
+        explanation = "Multi-layer deobfuscated dropper payload utilizing __halt_compiler and runtime stream execution."
+    elif "bagent" in snippet or "seo-spam" in cats:
+        verdict = "CONFIRMED_MALWARE"
+        action = "quarantine"
+        explanation = "Blackhat search engine cloaking script serving hidden spam pages to search crawler bots."
+    elif any(c in ("config", "laravel") for c in cats):
+        verdict = "SECURITY_MISCONFIG"
+        action = "patch"
+        explanation = "Insecure Laravel configuration or exposed rewrite rule."
+        diff_text = "# Suggested patch:\nDisable execution in asset folders or update .env settings."
+    else:
+        verdict = "HIGH_RISK_CODE"
+        action = "quarantine"
+        explanation = f"Flagged by Sentinel rule: {top_title}. Review findings and isolate into quarantine."
+
+    # If external LLM API is configured, attempt intelligent enhancement
+    if prov == "gemini" and key:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+            prompt = (
+                f"You are a Laravel security expert. Analyze this flagged file in a Laravel project:\n"
+                f"File: {rel_path}\nFinding: {top_title}\nSnippet: {snippet[:400]}\n"
+                f"Respond with JSON: {{'verdict': 'CONFIRMED_MALWARE'|'HIGH_RISK_CODE'|'FALSE_POSITIVE', "
+                f"'action': 'quarantine'|'patch'|'ignore', 'explanation': '<plain english explanation>', "
+                f"'diff': '<suggested unified diff or empty>'}}"
+            )
+            req_data = json.dumps({"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json"}}).encode("utf-8")
+            req = urllib.request.Request(url, data=req_data, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=12) as r:
+                resp = json.loads(r.read().decode("utf-8"))
+                part = resp["candidates"][0]["content"]["parts"][0]["text"]
+                llm_out = json.loads(part)
+                verdict = llm_out.get("verdict", verdict)
+                action = llm_out.get("action", action)
+                explanation = llm_out.get("explanation", explanation)
+                diff_text = llm_out.get("diff", diff_text)
+        except Exception:
+            pass  # gracefully falls back to deterministic heuristic
+
+    return {
+        "path": rel_path,
+        "verdict": verdict,
+        "action": action,
+        "provider": prov,
+        "explanation": explanation,
+        "diff": diff_text,
+        "fixed_code": fixed_code
+    }
+
+
+def ai_batch_analyze(root, provider="auto", api_key=""):
+    r = LAST.get("result")
+    if not r or not root:
+        return []
+    items = []
+    # Analyze the most critical flagged files
+    flagged = sorted(r.get("files", []), key=lambda x: SEV.get(x.get("sev", "info"), 0), reverse=True)
+    for f in flagged[:30]:
+        items.append(ai_analyze_file(root, f["path"], file_obj=f, provider=provider, api_key=api_key))
+    return items
+
+
+def ai_apply_fix(root, fix_data):
+    path = fix_data.get("path")
+    action = fix_data.get("action")
+    if not path or not root:
+        raise ValueError("Missing path or root directory")
+
+    full_path = os.path.join(root, path)
+    if not os.path.isfile(full_path):
+        raise ValueError(f"File not found: {path}")
+
+    # 1. Take safety snapshot first
+    snapshot = create_backup_snapshot(root, [path], action_name=f"ai_{action}_{os.path.basename(path)}")
+
+    # 2. Execute action
+    result_msg = ""
+    if action == "quarantine":
+        qres = do_quarantine(root, [path])
+        result_msg = f"Quarantined to {qres.get('folder', 'quarantine')}"
+    elif action == "patch":
+        patch_content = fix_data.get("fixed_code")
+        if patch_content:
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(patch_content)
+            result_msg = "Patched file successfully."
+        else:
+            result_msg = "No automated patch content provided."
+    elif action == "ignore":
+        result_msg = "Marked as ignored."
+    else:
+        raise ValueError(f"Unknown action: {action}")
+
+    return {
+        "ok": True,
+        "path": path,
+        "action": action,
+        "message": result_msg,
+        "snapshot_id": snapshot["id"]
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "Sentinel"
 
@@ -1753,6 +1968,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, d) if d else self._send(404, {"error": "unknown file"})
             if u.path == "/api/browse":
                 return self._send(200, browse((qs.get("path") or [""])[0]))
+            if u.path == "/api/ai/backups":
+                return self._send(200, list_backup_snapshots(LAST.get("root")))
+            if u.path == "/api/ai/status":
+                return self._send(200, {"gemini": bool(os.getenv("GEMINI_API_KEY")), "openai": bool(os.getenv("OPENAI_API_KEY"))})
             if u.path == "/api/quarantines":
                 return self._send(200, list_quarantines(LAST["root"]) if LAST["root"] else [])
             if u.path == "/api/export.json" and LAST["result"]:
@@ -1780,6 +1999,18 @@ class Handler(BaseHTTPRequestHandler):
                 if not LAST["root"]:
                     return self._send(400, {"error": "scan first"})
                 return self._send(200, do_quarantine(LAST["root"], [str(x) for x in body.get("files", [])]))
+            if u.path == "/api/ai/analyze":
+                if not LAST.get("root"):
+                    return self._send(400, {"error": "Scan a project first before running AI analysis"})
+                return self._send(200, ai_batch_analyze(LAST["root"], provider=body.get("provider", "auto"), api_key=body.get("apiKey", "")))
+            if u.path == "/api/ai/apply_fix":
+                if not LAST.get("root"):
+                    return self._send(400, {"error": "Scan a project first"})
+                return self._send(200, ai_apply_fix(LAST["root"], body))
+            if u.path == "/api/ai/rollback":
+                if not LAST.get("root"):
+                    return self._send(400, {"error": "Scan a project first"})
+                return self._send(200, rollback_snapshot(LAST["root"], str(body.get("snapId", ""))))
             if u.path == "/api/restore":
                 return self._send(200, do_restore(LAST["root"], str(body.get("id", ""))))
             return self._send(404, {"error": "not found"})
@@ -1808,13 +2039,17 @@ body{margin:0;background:var(--bg);color:var(--t);font:13.5px/1.5 -apple-system,
 code,.mono{font-family:ui-monospace,"SF Mono","Fira Code",Menlo,Consolas,monospace}
 header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--b);background:var(--p);box-shadow:0 4px 20px rgba(0,0,0,0.4)}
 .brand{display:flex;align-items:center;gap:12px}
-.logo-mark{width:32px;height:32px;background:#00f0ff;color:#000000;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;border-radius:6px;box-shadow:0 0 14px rgba(0,240,255,0.45)}
+
+/* Minimalist Monochrome Logo Mark */
+.logo-mark{width:32px;height:32px;background:#131a27;border:1px solid #334155;color:#f1f5f9;display:flex;align-items:center;justify-content:center;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.3)}
 .brand h1{font-size:15px;font-weight:800;margin:0;letter-spacing:0.04em;display:flex;align-items:center;gap:8px;color:#ffffff}
 .brand span.ver{font-size:10px;font-weight:700;padding:2px 7px;background:rgba(0,240,255,0.12);border:1px solid #00f0ff;border-radius:10px;color:#00f0ff;font-family:ui-monospace,monospace}
 .brand small{color:var(--m);font-size:11.5px}
-.chip-hacker-live{color:#00ff88;border:1px solid #00ff88;background:rgba(0,255,136,0.1);padding:3px 9px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.05em;font-family:ui-monospace,monospace}
-.chip-hacker{color:#00f0ff;border:1px solid #00f0ff;background:rgba(0,240,255,0.1);padding:3px 9px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.05em;font-family:ui-monospace,monospace;box-shadow:0 0 10px rgba(0,240,255,0.2)}
-.chip-shield{color:var(--m);border:1px solid var(--b2);background:var(--p2);padding:3px 9px;border-radius:4px;font-size:11px;font-family:ui-monospace,monospace}
+
+.pulse-dot{display:inline-block;width:7px;height:7px;background:#00ff88;border-radius:50%;margin-right:6px;box-shadow:0 0 8px #00ff88}
+.chip-hacker-live{display:inline-flex;align-items:center;color:#00ff88;border:1px solid #00ff88;background:rgba(0,255,136,0.1);padding:3px 9px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.05em;font-family:ui-monospace,monospace}
+.chip-hacker{display:inline-flex;align-items:center;gap:6px;color:#00f0ff;border:1px solid #00f0ff;background:rgba(0,240,255,0.1);padding:3px 9px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.05em;font-family:ui-monospace,monospace;box-shadow:0 0 10px rgba(0,240,255,0.2)}
+.chip-shield{display:inline-flex;align-items:center;gap:6px;color:var(--m);border:1px solid var(--b2);background:var(--p2);padding:3px 9px;border-radius:4px;font-size:11px;font-family:ui-monospace,monospace}
 
 main{padding:20px 24px;max-width:1560px;margin:auto}
 .card{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:18px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
@@ -1828,6 +2063,8 @@ button.pri{background:#00f0ff;border-color:#00f0ff;color:#000000;font-weight:800
 button.pri:hover{background:#33f3ff;border-color:#33f3ff;box-shadow:0 0 18px rgba(0,240,255,0.6)}
 button.danger{background:rgba(255,42,95,0.12);border:1px solid #ff2a5f;color:#ff2a5f;font-weight:700}
 button.danger:hover:not(:disabled){background:#ff2a5f;color:#ffffff;box-shadow:0 0 14px rgba(255,42,95,0.5)}
+button.success{background:rgba(0,255,136,0.12);border:1px solid #00ff88;color:#00ff88;font-weight:700}
+button.success:hover:not(:disabled){background:#00ff88;color:#000000;box-shadow:0 0 14px rgba(0,255,136,0.5)}
 button:disabled{opacity:.35;cursor:not-allowed}
 label.opt{color:var(--m);display:flex;gap:8px;align-items:center;font-size:12.5px;cursor:pointer;user-select:none}
 .bar{height:4px;background:var(--p2);border-radius:2px;overflow:hidden;margin-top:12px}
@@ -1854,15 +2091,15 @@ label.opt{color:var(--m);display:flex;gap:8px;align-items:center;font-size:12.5p
 
 .verdict{padding:16px 20px;border-radius:var(--radius);margin-bottom:16px;display:flex;gap:16px;align-items:center;border:1px solid var(--b)}
 .verdict.COMPROMISED{background:rgba(255,42,95,0.12);border-color:#ff2a5f;box-shadow:0 0 20px rgba(255,42,95,0.2)}
-.verdict.COMPROMISED .v-badge{background:#ff2a5f;color:#ffffff;font-weight:800;padding:4px 10px;border-radius:4px;font-size:12px;letter-spacing:0.05em;font-family:ui-monospace,monospace;box-shadow:0 0 10px rgba(255,42,95,0.6)}
+.verdict.COMPROMISED .v-badge{background:#ff2a5f;color:#ffffff;font-weight:800;padding:5px 12px;border-radius:4px;font-size:12px;letter-spacing:0.05em;font-family:ui-monospace,monospace;box-shadow:0 0 10px rgba(255,42,95,0.6);display:inline-flex;align-items:center;gap:6px}
 .verdict.CLEAN{background:rgba(0,255,136,0.1);border-color:#00ff88;box-shadow:0 0 20px rgba(0,255,136,0.15)}
-.verdict.CLEAN .v-badge{background:#00ff88;color:#000000;font-weight:800;padding:4px 10px;border-radius:4px;font-size:12px;letter-spacing:0.05em;font-family:ui-monospace,monospace}
+.verdict.CLEAN .v-badge{background:#00ff88;color:#000000;font-weight:800;padding:5px 12px;border-radius:4px;font-size:12px;letter-spacing:0.05em;font-family:ui-monospace,monospace;display:inline-flex;align-items:center;gap:6px}
 .v-text{display:flex;flex-direction:column;gap:3px}
 .v-text b{font-size:14.5px;color:#ffffff}
 .v-text span{font-size:12.5px;color:var(--m)}
 
 .tabs{display:flex;gap:6px;border-bottom:1px solid var(--b);margin-bottom:16px;flex-wrap:wrap}
-.tab{padding:9px 16px;cursor:pointer;color:var(--m);border-bottom:2px solid transparent;font-size:13px;font-weight:600;transition:all .15s}
+.tab{padding:9px 16px;cursor:pointer;color:var(--m);border-bottom:2px solid transparent;font-size:13px;font-weight:600;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
 .tab:hover{color:var(--t)}
 .tab.on{color:#00f0ff;border-bottom-color:#00f0ff;text-shadow:0 0 10px rgba(0,240,255,0.3)}
 
@@ -1872,7 +2109,7 @@ th{color:var(--m);font-weight:700;font-size:11px;text-transform:uppercase;letter
 tr.f{cursor:pointer;transition:background .1s}
 tr.f:hover{background:var(--p2)}
 
-.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:4px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;font-family:ui-monospace,monospace}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;font-family:ui-monospace,monospace}
 .badge.critical{background:var(--crit);color:#ffffff;box-shadow:0 0 10px rgba(255,42,95,0.5)}
 .badge.high{background:var(--high-bg);border:1px solid var(--high);color:var(--high)}
 .badge.medium{background:var(--med-bg);border:1px solid var(--med);color:var(--med)}
@@ -1890,7 +2127,7 @@ tr.f:hover{background:var(--p2)}
 
 /* RED HIGHLIGHT FOR MALWARE LINES IN SOURCE */
 .src{background:#05070a;border:1px solid var(--b);border-radius:var(--radius);overflow:auto;max-height:68vh;position:relative}
-.ln{display:flex;align-items:center;white-space:pre;font-family:ui-monospace,SFMono-Regular,\"SF Mono\",Menlo,Consolas,monospace;font-size:12px;line-height:1.6;border-left:5px solid transparent}
+.ln{display:flex;align-items:center;white-space:pre;font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;font-size:12px;line-height:1.6;border-left:5px solid transparent}
 .ln i{color:var(--faint);min-width:48px;text-align:right;padding:0 12px;font-style:normal;user-select:none;border-right:1px solid #141b26}
 .code-text{padding-left:8px;flex:1}
 .ln.hl{background:rgba(255,42,95,0.28) !important;border-left:5px solid #ff2a5f !important;color:#ffb8c6 !important;font-weight:600 !important;box-shadow:inset 0 0 12px rgba(255,42,95,0.25)}
@@ -1912,6 +2149,11 @@ tr.f:hover{background:var(--p2)}
 pre.dec{background:#05070a;border:1px solid var(--b);border-radius:var(--radius);padding:12px;overflow:auto;max-height:50vh;white-space:pre-wrap;word-break:break-all;font-size:12px;font-family:ui-monospace,Menlo,monospace;color:#ffffff}
 .chain{color:#00f0ff;font-weight:700;font-family:ui-monospace,Menlo,monospace;font-size:12px}
 
+/* AI Remediation Diff Box */
+.diff-box{background:#05070a;border:1px solid var(--b);border-radius:var(--radius);padding:12px;font-family:ui-monospace,monospace;font-size:12px;line-height:1.5;overflow:auto;max-height:260px;margin:8px 0}
+.diff-del{color:#ff8595;background:rgba(255,42,95,0.15);display:block;padding:1px 4px}
+.diff-add{color:#00ff88;background:rgba(0,255,136,0.15);display:block;padding:1px 4px}
+
 #modal{position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:40}
 #modal.open{display:flex}
 #mbox{background:var(--p);border:1px solid var(--b2);border-radius:10px;width:680px;max-width:94vw;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 25px 60px rgba(0,0,0,0.8)}
@@ -1919,29 +2161,41 @@ pre.dec{background:#05070a;border:1px solid var(--b);border-radius:var(--radius)
 .dir{padding:8px 12px;border-radius:5px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
 .dir:hover{background:var(--p2);color:#00f0ff}
 
+.icon-wrap{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
 .muted{color:var(--m)}.hide{display:none}
 </style></head><body>
 <header>
   <div class="brand">
-    <div class="logo-mark">⚡</div>
+    <div class="logo-mark">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+    </div>
     <div>
       <h1>LARAVEL SENTINEL <span class="ver">v2.1</span></h1>
       <small>Automated Malware Scanner &amp; Threat Deobfuscator</small>
     </div>
   </div>
   <div class="row" style="align-items:center;gap:12px">
-    <span class="chip-hacker-live">● SYSTEM ARMED</span>
-    <span class="chip-hacker">POWERED BY KNEAZLE</span>
-    <span class="chip-shield">READ-ONLY SAFETY SHIELD</span>
+    <span class="chip-hacker-live"><span class="pulse-dot"></span>SYSTEM ARMED</span>
+    <span class="chip-hacker">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+      POWERED BY KNEAZLE
+    </span>
+    <span class="chip-shield">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      READ-ONLY SAFE
+    </span>
   </div>
 </header>
 <main>
 <div class="card">
   <div class="row">
     <input id="path" class="grow" type="text" placeholder="/path/to/laravel-project">
-    <button id="browse">📂 Choose Folder…</button>
-    <button id="scan" class="pri">⚡ SCAN SYSTEM</button>
-    <button id="cancel" class="hide">■ Stop</button>
+    <button id="browse"></button>
+    <button id="scan" class="pri"></button>
+    <button id="cancel" class="hide"></button>
   </div>
   <div class="row" style="margin-top:12px">
     <label class="opt"><input type="checkbox" id="deep"> Deep scan JS/assets inside vendor &amp; node_modules (thorough)</label>
@@ -1956,26 +2210,28 @@ pre.dec{background:#05070a;border:1px solid var(--b);border-radius:var(--radius)
   <div class="cards" id="cards"></div>
   <div style="height:18px"></div>
   <div class="tabs" id="tabs">
-    <div class="tab on" data-t="files">🚨 Infected Files</div>
-    <div class="tab" data-t="find">⚡ All Threats</div>
-    <div class="tab" data-t="secrets">🔑 Leaked Secrets</div>
-    <div class="tab" data-t="fix">🛡️ How to Fix &amp; Clean</div>
-    <div class="tab" data-t="quar">📦 Quarantine Vault</div>
+    <div class="tab on" data-t="files" id="tab-files"></div>
+    <div class="tab" data-t="find" id="tab-find"></div>
+    <div class="tab" data-t="ai" id="tab-ai"></div>
+    <div class="tab" data-t="secrets" id="tab-secrets"></div>
+    <div class="tab" data-t="fix" id="tab-fix"></div>
+    <div class="tab" data-t="quar" id="tab-quar"></div>
   </div>
   <div id="p-files" class="card">
     <div class="row" style="margin-bottom:12px">
-      <input id="q" type="text" class="grow" placeholder="🔍 Type to filter files (e.g. index.php, backdoor, upload)...">
+      <input id="q" type="text" class="grow" placeholder="Type to filter files (e.g. index.php, backdoor, upload)...">
       <select id="cat"><option value="">All Categories</option></select>
       <input id="since" type="date" title="Only files modified on/after">
-      <button id="selhigh">🎯 Select Dangerous Files</button>
-      <button id="qbtn" class="danger" disabled>🔒 Move to Quarantine (0)</button>
-      <button id="xj">📥 Export JSON</button>
-      <button id="xh">📄 Download HTML Report</button>
+      <button id="selhigh"></button>
+      <button id="qbtn" class="danger" disabled></button>
+      <button id="xj"></button>
+      <button id="xh"></button>
     </div>
     <div class="scroll"><table><thead><tr><th style="width:32px"></th><th style="width:100px">Severity</th><th>File Location</th><th>Why It Was Flagged</th><th style="width:90px">Size</th><th style="width:150px">Modified</th></tr></thead><tbody id="rows"></tbody></table></div>
     <div id="more" class="muted" style="margin-top:10px"></div>
   </div>
   <div id="p-find" class="card hide"></div>
+  <div id="p-ai" class="card hide"></div>
   <div id="p-secrets" class="card hide"></div>
   <div id="p-fix" class="card hide"></div>
   <div id="p-quar" class="card hide"></div>
@@ -1984,223 +2240,472 @@ pre.dec{background:#05070a;border:1px solid var(--b);border-radius:var(--radius)
   <div id="p-iocs" class="card hide"></div>
 </div>
 <footer style="margin-top:48px;padding:20px 0;border-top:1px solid var(--b);display:flex;justify-content:space-between;align-items:center;color:var(--m);font-size:12px;letter-spacing:0.02em">
-  <div>⚡ Laravel Sentinel v2.1 &bull; Automated Malware &amp; Threat Deobfuscator</div>
+  <div>Laravel Sentinel v2.1 &bull; Automated Malware &amp; Threat Deobfuscator</div>
   <div>Powered by <strong style="color:#00f0ff;letter-spacing:0.04em">Kneazle</strong></div>
 </footer>
 </main>
-<div id="drawer"><div id="dh"><button id="dclose">✕ Close</button><div style="min-width:0;flex:1"><div id="dtitle" class="mono" style="word-break:break-all;color:#00f0ff;font-weight:700"></div></div></div><div id="db"></div></div>
+<div id="drawer"><div id="dh"><button id="dclose"></button><div style="min-width:0;flex:1"><div id="dtitle" class="mono" style="word-break:break-all;color:#00f0ff;font-weight:700"></div></div></div><div id="db"></div></div>
 <div id="modal"><div id="mbox"><div style="padding:14px 18px;border-bottom:1px solid var(--b)" class="row"><b>Choose project folder</b><span id="mpath" class="mono muted" style="flex:1;word-break:break-all"></span></div><div class="l" id="mlist"></div><div class="row" style="padding:14px 18px;border-top:1px solid var(--b);justify-content:flex-end"><button id="mcancel">Cancel</button><button id="muse" class="pri">Use this folder</button></div></div></div>
 
 <script>
 const qT=new URLSearchParams(location.search).get('t');if(qT)sessionStorage.sentinelToken=qT;const T=qT||sessionStorage.sentinelToken||'';const $=s=>document.querySelector(s);
 const SEVS=['critical','high','medium','low','info'];let R=null,F={sev:new Set(),q:'',cat:'',since:''},SEL=new Set(),SHOW=400;
+
+// Crisp SVG Icons (Zero Emojis)
+const ICONS = {
+  shield: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  shieldCheck: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
+  alertTriangle: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  bot: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8.01" y2="16"/><line x1="16" y1="16" x2="16.01" y2="16"/></svg>`,
+  key: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>`,
+  tool: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`,
+  box: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`,
+  folder: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>`,
+  scan: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
+  lock: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  download: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+  fileText: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>`,
+  code: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
+  check: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  x: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  sparkles: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/></svg>`,
+  rotateCcw: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`,
+  eye: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`
+};
+
+function icon(name){
+  const s=ICONS[name]||'';
+  const span=document.createElement('span');
+  span.className='icon-wrap';
+  span.innerHTML=s;
+  return span;
+}
+
+// Set button and tab labels with SVG icons
+$('#browse').replaceChildren(icon('folder'),' Choose Folder…');
+$('#scan').replaceChildren(icon('scan'),' SCAN SYSTEM');
+$('#cancel').replaceChildren(icon('x'),' Stop');
+$('#selhigh').replaceChildren(icon('check'),' Select Dangerous Files');
+$('#qbtn').replaceChildren(icon('lock'),' Move to Quarantine (0)');
+$('#xj').replaceChildren(icon('download'),' Export JSON');
+$('#xh').replaceChildren(icon('fileText'),' Download Report');
+$('#dclose').replaceChildren(icon('x'),' Close');
+
+$('#tab-files').replaceChildren(icon('alertTriangle'),' Infected Files');
+$('#tab-find').replaceChildren(icon('sparkles'),' All Threats');
+$('#tab-ai').replaceChildren(icon('bot'),' Agentic AI Analyst');
+$('#tab-secrets').replaceChildren(icon('key'),' Leaked Secrets');
+$('#tab-fix').replaceChildren(icon('tool'),' Remediation Guide');
+$('#tab-quar').replaceChildren(icon('box'),' Quarantine Vault');
+
 async function api(p,o){o=o||{};const r=await fetch(p,{method:o.method||'GET',headers:{'X-Token':T,'Content-Type':'application/json'},body:o.body?JSON.stringify(o.body):undefined});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
 function h(tag,a,...k){const e=document.createElement(tag);for(const[x,v]of Object.entries(a||{})){if(x==='class')e.className=v;else if(x==='text')e.textContent=v;else if(x.startsWith('on'))e.addEventListener(x.slice(2),v);else e.setAttribute(x,v)}for(const c of k.flat()){if(c==null)continue;e.append(c.nodeType?c:document.createTextNode(c))}return e}
 const fmt=n=>n>1073741824?(n/1073741824).toFixed(2)+' GB':n>1048576?(n/1048576).toFixed(1)+' MB':n>1024?(n/1024).toFixed(1)+' KB':n+' B';
 const dt=s=>s?new Date(s*1000).toLocaleString():'';
-const badge=s=>h('span',{class:'badge '+s,text:s.toUpperCase()});
-async function init(){const d=await api('/api/browse?path='+encodeURIComponent(localStorage.sentinelPath||'~'));$('#path').value=localStorage.sentinelPath||'';}
-$('#scan').onclick=async()=>{const path=$('#path').value.trim();if(!path)return fail('Enter or browse to your project folder.');localStorage.sentinelPath=path;$('#err').classList.add('hide');
- try{await api('/api/scan',{method:'POST',body:{path,deep:$('#deep').checked,baseline:$('#baseline').value.trim(),custom:$('#custom').value,since:''}})}catch(e){return fail(e.message)}
- $('#prog').classList.remove('hide');$('#cancel').classList.remove('hide');$('#scan').disabled=true;poll()};
+const badge=s=>h('span',{class:'badge '+s},s.toUpperCase());
+
+async function init(){
+  const d=await api('/api/browse?path='+encodeURIComponent(localStorage.sentinelPath||'~'));
+  $('#path').value=localStorage.sentinelPath||'';
+}
+
+$('#scan').onclick=async()=>{
+  const path=$('#path').value.trim();if(!path)return fail('Enter or browse to your project folder.');localStorage.sentinelPath=path;$('#err').classList.add('hide');
+  try{await api('/api/scan',{method:'POST',body:{path,deep:$('#deep').checked,baseline:$('#baseline').value.trim(),custom:$('#custom').value,since:''}})}catch(e){return fail(e.message)}
+  $('#prog').classList.remove('hide');$('#cancel').classList.remove('hide');$('#scan').disabled=true;poll();
+};
 $('#cancel').onclick=()=>api('/api/cancel',{method:'POST',body:{}});
 function fail(m){const e=$('#err');e.textContent=m;e.classList.remove('hide')}
-async function poll(){const p=await api('/api/progress');const pct=p.total?Math.round(p.done/p.total*100):5;$('#pbar').style.width=pct+'%';$('#ptxt').textContent=(p.phase||'')+' '+p.done+'/'+p.total+'  '+(p.current||'');
- if(p.status==='done'){$('#scan').disabled=false;$('#cancel').classList.add('hide');$('#prog').classList.add('hide');return load()}
- if(p.status==='error'||p.status==='cancelled'){$('#scan').disabled=false;$('#cancel').classList.add('hide');$('#prog').classList.add('hide');return fail(p.status==='error'?p.error:'Scan stopped.')}
- setTimeout(poll,500)}
-async function load(){R=await api('/api/results');SEL.clear();F={sev:new Set(),q:'',cat:'',since:''};$('#out').classList.remove('hide');
- const isBad = R.verdict.label==='COMPROMISED'||R.verdict.label==='SUSPICIOUS';
- const v=$('#verdict');v.className='verdict '+R.verdict.label;
- v.replaceChildren(
-   h('div',{class:'v-badge',text:isBad?'🚨 MALWARE DETECTED':'🛡️ SYSTEM SECURE'}),
-   h('div',{class:'v-text'},
-     h('b',{text:isBad?'Critical security threats were found in this project!':'No malware or security threats detected.'}),
-     h('span',{text:R.files.length+' dangerous file(s) flagged · '+R.scanned+' files scanned in '+R.seconds+'s · '+R.keys.length+' leaked secrets/keys found.'})
-   )
- );
- const SEV_INFO = {
-   critical:{title:'Critical Malware',sub:'Backdoors, webshells & trojans'},
-   high:{title:'High Risk Code',sub:'Dangerous functions & droppers'},
-   medium:{title:'Suspicious Files',sub:'Anomalies & obfuscation'},
-   low:{title:'Low Risk',sub:'Minor security warnings'},
-   info:{title:'Audit Info',sub:'Laravel configuration notices'}
- };
- const c=$('#cards');c.replaceChildren(...SEVS.map(s=>{
-   const info=SEV_INFO[s]||{title:s,sub:'findings'};
-   return h('div',{class:'stat '+s,onclick:ev=>{F.sev.has(s)?F.sev.delete(s):F.sev.add(s);cardsOn();render()},'data-s':s},
-     h('div',{class:'stat-num '+s,text:R.counts[s]||0}),
-     h('div',{class:'stat-label',text:info.title}),
-     h('div',{class:'stat-sub',text:info.sub})
-   );
- }));
- const cs=$('#cat');cs.replaceChildren(h('option',{value:'',text:'All Categories'}),...Object.entries(R.categories).sort((a,b)=>b[1]-a[1]).map(([k,n])=>h('option',{value:k,text:k+' ('+n+')'})));
- render();renderSecrets();renderFix();renderQuar();FIND=null}
+
+async function poll(){
+  const p=await api('/api/progress');const pct=p.total?Math.round(p.done/p.total*100):5;$('#pbar').style.width=pct+'%';$('#ptxt').textContent=(p.phase||'')+' '+p.done+'/'+p.total+'  '+(p.current||'');
+  if(p.status==='done'){$('#scan').disabled=false;$('#cancel').classList.add('hide');$('#prog').classList.add('hide');return load()}
+  if(p.status==='error'||p.status==='cancelled'){$('#scan').disabled=false;$('#cancel').classList.add('hide');$('#prog').classList.add('hide');return fail(p.status==='error'?p.error:'Scan stopped.')}
+  setTimeout(poll,500);
+}
+
+async function load(){
+  R=await api('/api/results');SEL.clear();F={sev:new Set(),q:'',cat:'',since:''};$('#out').classList.remove('hide');
+  const isBad = R.verdict.label==='COMPROMISED'||R.verdict.label==='SUSPICIOUS';
+  const v=$('#verdict');v.className='verdict '+R.verdict.label;
+  v.replaceChildren(
+    h('div',{class:'v-badge'},isBad?icon('alertTriangle'):icon('shieldCheck'),isBad?' MALWARE DETECTED':' SYSTEM SECURE'),
+    h('div',{class:'v-text'},
+      h('b',{text:isBad?'Security threats discovered in project files!':'No malicious code or backdoors detected.'}),
+      h('span',{text:R.files.length+' dangerous file(s) flagged · '+R.scanned+' files scanned in '+R.seconds+'s · '+R.keys.length+' leaked secrets/keys found.'})
+    )
+  );
+  const SEV_INFO = {
+    critical:{title:'Critical Malware',sub:'Backdoors, webshells & trojans'},
+    high:{title:'High Risk Code',sub:'Dangerous functions & droppers'},
+    medium:{title:'Suspicious Files',sub:'Anomalies & obfuscation'},
+    low:{title:'Low Risk',sub:'Minor security warnings'},
+    info:{title:'Audit Info',sub:'Laravel configuration notices'}
+  };
+  const c=$('#cards');c.replaceChildren(...SEVS.map(s=>{
+    const info=SEV_INFO[s]||{title:s,sub:'findings'};
+    return h('div',{class:'stat '+s,onclick:ev=>{F.sev.has(s)?F.sev.delete(s):F.sev.add(s);cardsOn();render()},'data-s':s},
+      h('div',{class:'stat-num '+s,text:R.counts[s]||0}),
+      h('div',{class:'stat-label',text:info.title}),
+      h('div',{class:'stat-sub',text:info.sub})
+    );
+  }));
+  const cs=$('#cat');cs.replaceChildren(h('option',{value:'',text:'All Categories'}),...Object.entries(R.categories).sort((a,b)=>b[1]-a[1]).map(([k,n])=>h('option',{value:k,text:k+' ('+n+')'})));
+  render();renderSecrets();renderFix();renderQuar();FIND=null;AI_ITEMS=null;
+}
+
 function cardsOn(){document.querySelectorAll('.stat').forEach(e=>e.classList.toggle('on',F.sev.has(e.dataset.s)))}
 function rows(){return R.files.filter(f=>(!F.sev.size||F.sev.has(f.sev))&&(!F.cat||f.cats.includes(F.cat))&&(!F.since||f.mtime*1000>=new Date(F.since).getTime())&&(!F.q||(f.path+' '+f.top.join(' ')).toLowerCase().includes(F.q)))}
-function render(){const rs=rows();const tb=$('#rows');tb.replaceChildren(...rs.slice(0,SHOW).map(f=>{const cb=h('input',{type:'checkbox'});cb.checked=SEL.has(f.path);cb.onclick=e=>{e.stopPropagation();cb.checked?SEL.add(f.path):SEL.delete(f.path);upd()};
- return h('tr',{class:'f',onclick:()=>openFile(f.id)},
-   h('td',{},cb),
-   h('td',{},badge(f.sev)),
-   h('td',{},h('code',{style:'color:#00f0ff;font-weight:600',text:f.path}),h('div',{},f.cats.map(x=>h('span',{class:'chip',text:x})))),
-   h('td',{},f.top.map(t=>h('div',{style:'margin:2px 0',text:t})),f.decoded?h('span',{class:'chip',style:'color:#00ff88;border-color:#00ff88',text:'🔓 '+f.decoded+' decoded payload(s)'}):null),
-   h('td',{text:fmt(f.size)}),
-   h('td',{text:dt(f.mtime)})
- );
-}));
- $('#more').textContent=rs.length>SHOW?('Showing first '+SHOW+' of '+rs.length+' - narrow your search to see more.'):rs.length+' file(s) found';upd()}
-function upd(){const b=$('#qbtn');b.textContent='🔒 Move to Quarantine ('+SEL.size+')';b.disabled=!SEL.size}
+
+function render(){
+  const rs=rows();const tb=$('#rows');
+  tb.replaceChildren(...rs.slice(0,SHOW).map(f=>{
+    const cb=h('input',{type:'checkbox'});cb.checked=SEL.has(f.path);cb.onclick=e=>{e.stopPropagation();cb.checked?SEL.add(f.path):SEL.delete(f.path);upd()};
+    return h('tr',{class:'f',onclick:()=>openFile(f.id)},
+      h('td',{},cb),
+      h('td',{},badge(f.sev)),
+      h('td',{},h('code',{style:'color:#00f0ff;font-weight:600',text:f.path}),h('div',{},f.cats.map(x=>h('span',{class:'chip',text:x})))),
+      h('td',{},f.top.map(t=>h('div',{style:'margin:2px 0',text:t})),f.decoded?h('span',{class:'chip',style:'color:#00ff88;border-color:#00ff88',text:f.decoded+' decoded payload(s)'}):null),
+      h('td',{text:fmt(f.size)}),
+      h('td',{text:dt(f.mtime)})
+    );
+  }));
+  $('#more').textContent=rs.length>SHOW?('Showing first '+SHOW+' of '+rs.length+' - narrow your search to see more.'):rs.length+' file(s) found';
+  upd();
+}
+
+function upd(){
+  const b=$('#qbtn');b.replaceChildren(icon('lock'),' Move to Quarantine ('+SEL.size+')');b.disabled=!SEL.size;
+}
+
 $('#q').oninput=e=>{F.q=e.target.value.toLowerCase();render()};$('#cat').onchange=e=>{F.cat=e.target.value;render()};$('#since').onchange=e=>{F.since=e.target.value;render()};
 $('#selhigh').onclick=()=>{R.files.filter(f=>f.sev==='critical'||f.sev==='high').forEach(f=>SEL.add(f.path));render()};
-$('#qbtn').onclick=async()=>{if(!confirm('Move '+SEL.size+' dangerous file(s) into safe quarantine?\n\nFiles are isolated safely beside your project with read-only permissions. You can restore them anytime.'))return;
- const r=await api('/api/quarantine',{method:'POST',body:{files:[...SEL]}});alert('Successfully quarantined '+r.moved+' file(s) into:\n'+r.folder+(r.errors.length?'\n\nErrors:\n'+r.errors.join('\n'):''));SEL.clear();renderQuar();tab('quar')};
-$('#xj').onclick=()=>location.href='/api/export.json?t='+T;$('#xh').onclick=()=>location.href='/api/export.html?t='+T;
+$('#qbtn').onclick=async()=>{
+  if(!confirm('Move '+SEL.size+' dangerous file(s) into safe quarantine?\n\nFiles are isolated safely beside your project with read-only permissions (0400). You can restore them anytime.'))return;
+  const r=await api('/api/quarantine',{method:'POST',body:{files:[...SEL]}});
+  alert('Successfully quarantined '+r.moved+' file(s) into:\n'+r.folder+(r.errors.length?'\n\nErrors:\n'+r.errors.join('\n'):''));
+  SEL.clear();renderQuar();tab('quar');
+};
+$('#xj').onclick=()=>location.href='/api/export.json?t='+T;
+$('#xh').onclick=()=>location.href='/api/export.html?t='+T;
+
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>tab(t.dataset.t));
-function tab(n){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.t===n));['files','find','secrets','fix','quar'].forEach(x=>{const el=$('#p-'+x);if(el)el.classList.toggle('hide',x!==n)});if(n==='quar')renderQuar();if(n==='find')renderFind()}
+function tab(n){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.t===n));
+  ['files','find','ai','secrets','fix','quar'].forEach(x=>{
+    const el=$('#p-'+x);
+    if(el)el.classList.toggle('hide',x!==n);
+  });
+  if(n==='quar')renderQuar();
+  if(n==='find')renderFind();
+  if(n==='ai')renderAI();
+}
 
 async function openFile(id,jump){
- const d=await api('/api/file?id='+id);
- $('#dtitle').textContent=d.path;
- const body=$('#db');body.replaceChildren();
- const tabs=h('div',{class:'tabs'});const panes={};const tabsEl={};
- const mk=(k,l,el)=>{const t=h('div',{class:'tab',text:l,onclick:()=>{Object.keys(panes).forEach(x=>{panes[x].classList.toggle('hide',x!==k);tabsEl[x].classList.toggle('on',x===k)});if(k==='s'&&hlList.length)setTimeout(()=>jumpToLine(jump||hlList[0]),60)}});tabsEl[k]=t;panes[k]=el;tabs.append(t);return el};
+  const d=await api('/api/file?id='+id);
+  $('#dtitle').textContent=d.path;
+  const body=$('#db');body.replaceChildren();
+  const tabs=h('div',{class:'tabs'});const panes={};const tabsEl={};
+  const mk=(k,l,el,ic)=>{
+    const t=h('div',{class:'tab',onclick:()=>{
+      Object.keys(panes).forEach(x=>{panes[x].classList.toggle('hide',x!==k);tabsEl[x].classList.toggle('on',x===k)});
+      if(k==='s'&&hlList.length)setTimeout(()=>jumpToLine(jump||hlList[0]),60);
+    }},icon(ic),' ',l);
+    tabsEl[k]=t;panes[k]=el;tabs.append(t);return el;
+  };
 
- const hl=new Set(d.findings.filter(f=>f.line&&!f.layer).map(f=>f.line));
- const hlList=[...hl].sort((a,b)=>a-b);
+  const hl=new Set(d.findings.filter(f=>f.line&&!f.layer).map(f=>f.line));
+  const hlList=[...hl].sort((a,b)=>a-b);
 
- const fp=h('div',{});
- if(!d.findings.length)fp.append(h('p',{class:'muted',text:'No active threats found in this file.'}));
- d.findings.forEach(f=>{
-   fp.append(h('div',{class:'fnd '+f.sev},
-     h('div',{style:'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'},
-       badge(f.sev),
-       f.line?h('button',{class:'btn-jump',onclick:()=>{tabsEl.s.click();setTimeout(()=>jumpToLine(f.line),80)}},'🔴 View Line '+f.line+' in Red Code'):null
-     ),
-     h('b',{style:'font-size:14px;color:var(--t)',text:f.title}),
-     h('div',{style:'margin:6px 0'},
-       h('span',{class:'chip',text:f.cat}),
-       f.layer?h('span',{class:'chip',style:'color:#00ff88;border-color:#00ff88',text:'In Decoded Payload Layer'}):null,
-       f.line?h('span',{class:'chip',style:'color:#ff2a5f;border-color:#ff2a5f;font-weight:700',text:'Line '+f.line}):null
-     ),
-     f.desc?h('p',{style:'color:var(--m);margin:8px 0;line-height:1.5',text:f.desc}):null,
-     f.snippet?h('pre',{class:'dec',style:'padding:8px 10px;margin-top:6px;color:#ff9ebb;background:#101520',text:(f.line?'line '+f.line+': ':'')+f.snippet}):null
-   ));
- });
+  const fp=h('div',{});
+  if(!d.findings.length)fp.append(h('p',{class:'muted',text:'No active threats found in this file.'}));
+  d.findings.forEach(f=>{
+    fp.append(h('div',{class:'fnd '+f.sev},
+      h('div',{style:'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'},
+        badge(f.sev),
+        f.line?h('button',{class:'btn-jump',onclick:()=>{tabsEl.s.click();setTimeout(()=>jumpToLine(f.line),80)}},icon('eye'),' View Line '+f.line+' in Red Code'):null
+      ),
+      h('b',{style:'font-size:14px;color:var(--t)',text:f.title}),
+      h('div',{style:'margin:6px 0'},
+        h('span',{class:'chip',text:f.cat}),
+        f.layer?h('span',{class:'chip',style:'color:#00ff88;border-color:#00ff88',text:'In Decoded Payload Layer'}):null,
+        f.line?h('span',{class:'chip',style:'color:#ff2a5f;border-color:#ff2a5f;font-weight:700',text:'Line '+f.line}):null
+      ),
+      f.desc?h('p',{style:'color:var(--m);margin:8px 0;line-height:1.5',text:f.desc}):null,
+      f.snippet?h('pre',{class:'dec',style:'padding:8px 10px;margin-top:6px;color:#ff9ebb;background:#101520',text:(f.line?'line '+f.line+': ':'')+f.snippet}):null
+    ));
+  });
 
- const src=h('div',{class:'src'});
- d.source.split('\n').slice(0,3000).forEach((l,i)=>{
-   const isHl=hl.has(i+1);
-   const lineEl=h('div',{class:'ln'+(isHl?' hl':''),'data-l':i+1},
-     h('i',{text:i+1}),
-     h('span',{class:'code-text',text:l.slice(0,600)}),
-     isHl?h('span',{class:'threat-pill',text:'🚨 THREAT ON LINE '+(i+1)}):null
-   );
-   src.append(lineEl);
- });
+  const src=h('div',{class:'src'});
+  d.source.split('\n').slice(0,3000).forEach((l,i)=>{
+    const isHl=hl.has(i+1);
+    const lineEl=h('div',{class:'ln'+(isHl?' hl':''),'data-l':i+1},
+      h('i',{text:i+1}),
+      h('span',{class:'code-text',text:l.slice(0,600)}),
+      isHl?h('span',{class:'threat-pill',text:'MALWARE LINE [LINE '+(i+1)+']'}):null
+    );
+    src.append(lineEl);
+  });
 
- function jumpToLine(l){
-   const el=src.querySelector('.ln[data-l="'+l+'"]');
-   if(el){
-     el.scrollIntoView({block:'center',behavior:'smooth'});
-     el.classList.add('flash');
-     setTimeout(()=>el.classList.remove('flash'),1200);
-   }
- }
+  function jumpToLine(l){
+    const el=src.querySelector('.ln[data-l="'+l+'"]');
+    if(el){
+      el.scrollIntoView({block:'center',behavior:'smooth'});
+      el.classList.add('flash');
+      setTimeout(()=>el.classList.remove('flash'),1200);
+    }
+  }
 
- const banner=h('div',{class:'src-banner'},
-   h('div',{style:'display:flex;align-items:center;gap:10px;flex-wrap:wrap'},
-     h('span',{style:'font-weight:800;color:'+(hlList.length?'#ff2a5f':'#00ff88')+';display:flex;align-items:center;gap:6px'},
-       hlList.length?'🚨 '+hlList.length+' THREAT LINE(S) FOUND:':'✓ NO MALWARE LINES DETECTED'
-     ),
-     ...hlList.map(l=>h('button',{class:'btn-jump-pill',onclick:()=>jumpToLine(l)},'🔴 Jump to Line '+l))
-   )
- );
+  const banner=h('div',{class:'src-banner'},
+    h('div',{style:'display:flex;align-items:center;gap:10px;flex-wrap:wrap'},
+      h('span',{style:'font-weight:800;color:'+(hlList.length?'#ff2a5f':'#00ff88')+';display:flex;align-items:center;gap:6px'},
+        icon(hlList.length?'alertTriangle':'shieldCheck'),
+        hlList.length?hlList.length+' THREAT LINE(S) FOUND:':'NO MALWARE LINES DETECTED'
+      ),
+      ...hlList.map(l=>h('button',{class:'btn-jump-pill',onclick:()=>jumpToLine(l)},'Jump to Line '+l))
+    )
+  );
 
- const sp=h('div',{},banner,d.truncated?h('p',{class:'muted',style:'padding:4px 0',text:'Showing the first 300 KB.'}):null,src);
+  const sp=h('div',{},banner,d.truncated?h('p',{class:'muted',style:'padding:4px 0',text:'Showing the first 300 KB.'}):null,src);
 
- const dp=h('div',{});
- if(!d.payloads.length)dp.append(h('p',{class:'muted',text:'No encoded or hidden payloads were found in this file.'}));
- d.payloads.forEach((p,i)=>dp.append(h('div',{class:'fnd'},
-   h('div',{},h('span',{class:'chain',text:p.chain.join(' → ')})),
-   h('div',{style:'margin:6px 0'},h('span',{class:'chip',text:p.status}),h('span',{class:'chip',text:p.size+' bytes'}),h('span',{class:'chip',text:'entropy '+p.entropy})),
-   h('pre',{class:'dec',text:p.text}),
-   h('button',{onclick:()=>navigator.clipboard.writeText(p.text)},'📋 Copy Payload')
- )));
+  const dp=h('div',{});
+  if(!d.payloads.length)dp.append(h('p',{class:'muted',text:'No encoded or hidden payloads were found in this file.'}));
+  d.payloads.forEach((p,i)=>dp.append(h('div',{class:'fnd'},
+    h('div',{},h('span',{class:'chain',text:p.chain.join(' → ')})),
+    h('div',{style:'margin:6px 0'},h('span',{class:'chip',text:p.status}),h('span',{class:'chip',text:p.size+' bytes'}),h('span',{class:'chip',text:'entropy '+p.entropy})),
+    h('pre',{class:'dec',text:p.text}),
+    h('button',{onclick:()=>navigator.clipboard.writeText(p.text)},icon('fileText'),' Copy Payload')
+  )));
 
- const ip=h('div',{},
-   h('table',{},...[['File Path',d.path],['File Size',fmt(d.size)],['Last Modified',dt(d.mtime)],['File Permissions',d.mode],['SHA-256 Hash',d.sha256||'-'],['MD5 Hash',d.md5||'-'],['Threat Categories',d.cats.join(', ')]].map(([a,b])=>h('tr',{},h('td',{class:'muted',text:a}),h('td',{class:'mono',text:b})))),
-   h('p',{style:'margin-top:14px'},h('button',{onclick:()=>navigator.clipboard.writeText(d.sha256||'')},'📋 Copy SHA-256 (for VirusTotal)'))
- );
+  const ip=h('div',{},
+    h('table',{},...[['File Path',d.path],['File Size',fmt(d.size)],['Last Modified',dt(d.mtime)],['File Permissions',d.mode],['SHA-256 Hash',d.sha256||'-'],['MD5 Hash',d.md5||'-'],['Threat Categories',d.cats.join(', ')]].map(([a,b])=>h('tr',{},h('td',{class:'muted',text:a}),h('td',{class:'mono',text:b})))),
+    h('p',{style:'margin-top:14px'},h('button',{onclick:()=>navigator.clipboard.writeText(d.sha256||'')},icon('fileText'),' Copy SHA-256 (for VirusTotal)'))
+  );
 
- mk('f','🚨 Threats ('+d.findings.length+')',fp);
- mk('s','💻 Source Code',sp);
- mk('d','🔓 Decoded Malware ('+d.payloads.length+')',dp);
- mk('i','ℹ️ File Info',ip);
- body.append(tabs,...Object.values(panes));
+  mk('f','Threats ('+d.findings.length+')',fp,'alertTriangle');
+  mk('s','Source Code',sp,'code');
+  mk('d','Decoded ('+d.payloads.length+')',dp,'fileText');
+  mk('i','File Info',ip,'shield');
+  body.append(tabs,...Object.values(panes));
 
- Object.keys(panes).forEach((x,i)=>{panes[x].classList.toggle('hide',i!==0);tabsEl[x].classList.toggle('on',i===0)});
- $('#drawer').classList.add('open');
- if(jump){
-   tabsEl.s.click();
-   setTimeout(()=>jumpToLine(jump),100);
- } else if(hlList.length){
-   // Auto scroll preview when user opens source
-   setTimeout(()=>{if(!panes.s.classList.contains('hide'))jumpToLine(hlList[0]);},120);
- }
+  Object.keys(panes).forEach((x,i)=>{panes[x].classList.toggle('hide',i!==0);tabsEl[x].classList.toggle('on',i===0)});
+  $('#drawer').classList.add('open');
+  if(jump){
+    tabsEl.s.click();
+    setTimeout(()=>jumpToLine(jump),100);
+  } else if(hlList.length){
+    setTimeout(()=>{if(!panes.s.classList.contains('hide'))jumpToLine(hlList[0]);},120);
+  }
 }
 $('#dclose').onclick=()=>$('#drawer').classList.remove('open');
 
-function renderSecrets(){const p=$('#p-secrets');
- p.replaceChildren(
-   h('h3',{style:'color:#00f0ff',text:'🔑 Exposed Passwords, API Keys & Database Secrets'}),
-   h('p',{class:'muted',text:'Rotate these secrets immediately if your project was exposed to the web or untrusted servers. Click any row to jump directly to the code line.'}),
-   (R.secrets.length||R.keys.length)?h('table',{},
-     h('tr',{},h('th',{text:'Secret Type'}),h('th',{text:'File & Line'}),h('th',{text:'Masked Value'}),h('th',{text:'Action'})),
-     ...R.secrets.map(s=>h('tr',{class:'f',onclick:()=>openByPath(s.file,s.line)},h('td',{class:'mono',style:'color:#ffd000',text:s.key}),h('td',{class:'mono',text:s.file+':'+s.line}),h('td',{class:'mono',text:s.masked}),h('td',{},h('span',{class:'chip',text:'Exposed Secret'})))),
-     ...R.keys.map(s=>h('tr',{class:'f',onclick:()=>openByPath(s.file,s.line)},h('td',{style:'color:#ffd000',text:s.type}),h('td',{class:'mono',text:s.file+':'+s.line}),h('td',{class:'mono',text:s.masked}),h('td',{},h('span',{class:'chip',text:'API Key'}))))
-   ):h('p',{text:'✓ No leaked keys or secrets found in the codebase.'})
- );
+// ------------------------------------------------------------------------------------------
+// Agentic AI Remediation & Fix Engine
+// ------------------------------------------------------------------------------------------
+let AI_ITEMS = null;
+async function renderAI(){
+  const p=$('#p-ai');
+  const storedKey = localStorage.sentinelAiKey || '';
+  const provider = localStorage.sentinelAiProv || 'auto';
+
+  const cfgRow = h('div',{class:'row',style:'align-items:center;margin-bottom:16px;padding:14px;background:var(--p2);border-radius:var(--radius);border:1px solid var(--b)'},
+    h('span',{style:'font-weight:700;color:#00f0ff;display:flex;align-items:center;gap:6px'},icon('bot'),' Agentic AI Settings:'),
+    h('select',{id:'ai-prov',onchange:e=>{localStorage.sentinelAiProv=e.target.value}},
+      h('option',{value:'auto',selected:provider==='auto'},'Auto-Detect (Gemini / OpenAI / Heuristic)'),
+      h('option',{value:'gemini',selected:provider==='gemini'},'Google Gemini API (Fast Token Triage)'),
+      h('option',{value:'openai',selected:provider==='openai'},'OpenAI / Local Ollama (v1/chat)'),
+      h('option',{value:'heuristic',selected:provider==='heuristic'},'Deterministic Rulebook (Offline)')
+    ),
+    h('input',{type:'text',id:'ai-key',placeholder:'Optional: API Key (or set GEMINI_API_KEY in env)',style:'width:280px',value:storedKey,onchange:e=>{localStorage.sentinelAiKey=e.target.value.trim()}}),
+    h('button',{class:'pri',onclick:()=>runAIAnalysis()},icon('sparkles'),' Run AI Threat Triage & Fix Analysis')
+  );
+
+  const container = h('div',{id:'ai-results'});
+  if(!AI_ITEMS){
+    container.replaceChildren(
+      h('p',{class:'muted',text:'Click "Run AI Threat Triage & Fix Analysis" above to have the Agentic AI evaluate all detected malware, identify false positives, and stage safe remediation fixes with rollback.'})
+    );
+  } else {
+    renderAIItems(container);
+  }
+
+  // Backup Snapshots Section
+  const backupSection = h('div',{style:'margin-top:24px;padding-top:16px;border-top:1px solid var(--b)'},
+    h('h4',{style:'color:#00f0ff;margin:0 0 10px;display:flex;align-items:center;gap:6px'},icon('rotateCcw'),' Safety Snapshots & Rollback History'),
+    h('div',{id:'ai-backups',text:'Loading snapshots…'})
+  );
+
+  p.replaceChildren(cfgRow, container, backupSection);
+  loadSnapshots();
 }
 
-function renderFix(){$('#p-fix').replaceChildren(
-  h('h3',{style:'color:#00ff88',text:'🛡️ How to Clean & Protect Your Laravel Application'}),
-  h('ol',{style:'line-height:1.7'},R.remediation.map(x=>h('li',{style:'margin-bottom:12px'},h('b',{style:'font-size:14px;color:var(--t)',text:x.title}),h('div',{class:'muted',style:'margin-top:2px',text:x.detail}))))
-);}
+async function runAIAnalysis(){
+  const c=$('#ai-results');
+  c.replaceChildren(h('p',{style:'color:#00f0ff;display:flex;align-items:center;gap:8px'},icon('sparkles'),' Agentic AI is evaluating threats and calculating safe patch diffs…'));
+  try{
+    const prov=$('#ai-prov')?$('#ai-prov').value:localStorage.sentinelAiProv||'auto';
+    const key=$('#ai-key')?$('#ai-key').value:localStorage.sentinelAiKey||'';
+    AI_ITEMS = await api('/api/ai/analyze',{method:'POST',body:{provider:prov,apiKey:key}});
+    renderAIItems(c);
+  }catch(e){
+    c.replaceChildren(h('p',{class:'crit',text:'AI Analysis failed: '+e.message}));
+  }
+}
 
-async function renderQuar(){const q=await api('/api/quarantines');$('#p-quar').replaceChildren(
-  h('h3',{style:'color:#00f0ff',text:'📦 Quarantine Vault'}),
-  h('p',{class:'muted',text:'Dangerous files are safely moved out of your web directory and locked with read-only permissions (0400). Nothing is deleted.'}),
-  q.length?q.map(x=>h('div',{class:'fnd'},h('b',{text:x.id}),' · '+x.files.length+' file(s) isolated',h('div',{class:'mono muted',style:'margin:6px 0',text:x.folder}),h('button',{onclick:async()=>{const r=await api('/api/restore',{method:'POST',body:{id:x.id}});alert('Restored '+r.restored+' file(s).'+(r.errors.length?'\n\nErrors:\n'+r.errors.join('\n'):''));renderQuar()}},'↩ Restore Files'))):h('p',{text:'Quarantine vault is currently empty.'})
-);}
+function renderAIItems(container){
+  if(!AI_ITEMS||!AI_ITEMS.length){
+    container.replaceChildren(h('p',{class:'muted',text:'No active threats to remediate. All scanned files are clean.'}));
+    return;
+  }
+  container.replaceChildren(
+    h('div',{style:'display:flex;justify-content:space-between;align-items:center;margin-bottom:14px'},
+      h('span',{style:'font-weight:700',text:AI_ITEMS.length+' Actionable Remediations Proposed by Agentic AI:'}),
+      h('button',{class:'success',onclick:()=>applyAllAIFixes()},icon('check'),' Apply All Recommended Fixes (with Snapshot)')
+    ),
+    ...AI_ITEMS.map((item,idx)=>{
+      const sevClass = item.verdict==='CONFIRMED_MALWARE'?'critical':item.verdict==='HIGH_RISK_CODE'?'high':'medium';
+      return h('div',{class:'fnd '+sevClass,style:'margin-bottom:14px'},
+        h('div',{style:'display:flex;justify-content:space-between;align-items:center'},
+          h('span',{class:'badge '+sevClass},item.verdict.replace('_',' ')),
+          h('span',{class:'chip',text:'Action: '+item.action.toUpperCase()})
+        ),
+        h('div',{style:'margin:8px 0'},h('code',{style:'color:#00f0ff;font-weight:700',text:item.path})),
+        h('p',{style:'color:var(--t);margin:6px 0;font-size:13px',text:item.explanation}),
+        item.diff?h('pre',{class:'diff-box',text:item.diff}):null,
+        h('div',{style:'display:flex;gap:10px;margin-top:10px'},
+          h('button',{class:'success',onclick:()=>applySingleAIFix(item,idx)},icon('check'),' Apply Fix ('+item.action+')'),
+          h('button',{onclick:()=>openByPath(item.path)},icon('eye'),' Inspect File')
+        )
+      );
+    })
+  );
+}
+
+async function applySingleAIFix(item,idx){
+  if(!confirm('Apply '+item.action+' to '+item.path+'?\n\nA safety snapshot will be created in .sentinel_backups before changes.'))return;
+  try{
+    const r=await api('/api/ai/apply_fix',{method:'POST',body:item});
+    alert('Fix applied successfully!\n\n'+r.message+'\nSnapshot saved: '+r.snapshot_id);
+    AI_ITEMS.splice(idx,1);
+    renderAIItems($('#ai-results'));
+    loadSnapshots();
+  }catch(e){
+    alert('Error applying fix: '+e.message);
+  }
+}
+
+async function applyAllAIFixes(){
+  if(!confirm('Apply all '+AI_ITEMS.length+' recommended AI fixes?\n\nA full safety snapshot will be created first with 1-click rollback available.'))return;
+  let count=0;
+  for(const item of [...AI_ITEMS]){
+    try{
+      await api('/api/ai/apply_fix',{method:'POST',body:item});
+      count++;
+    }catch(e){}
+  }
+  alert('Successfully applied '+count+' AI remediation fixes!\nAll originals saved safely in .sentinel_backups.');
+  AI_ITEMS=[];
+  renderAIItems($('#ai-results'));
+  loadSnapshots();
+}
+
+async function loadSnapshots(){
+  const el=$('#ai-backups');if(!el)return;
+  try{
+    const list=await api('/api/ai/backups');
+    if(!list.length){
+      el.replaceChildren(h('p',{class:'muted',text:'No backups created yet. Snapshots are created automatically before any AI remediation.'}));
+      return;
+    }
+    el.replaceChildren(
+      h('table',{},
+        h('tr',{},h('th',{text:'Snapshot ID'}),h('th',{text:'Timestamp'}),h('th',{text:'Action'}),h('th',{text:'Files Saved'}),h('th',{text:'Rollback'})),
+        ...list.map(s=>h('tr',{},
+          h('td',{class:'mono',style:'color:#00f0ff',text:s.id}),
+          h('td',{text:s.date}),
+          h('td',{text:s.action}),
+          h('td',{text:(s.files||[]).length+' file(s)'}),
+          h('td',{},h('button',{class:'danger',onclick:()=>doRollback(s.id)},icon('rotateCcw'),' Rollback'))
+        ))
+      )
+    );
+  }catch(e){
+    el.textContent='No snapshots available.';
+  }
+}
+
+async function doRollback(snapId){
+  if(!confirm('Rollback project files to snapshot '+snapId+'?\n\nThis restores original files that were quarantined or patched.'))return;
+  try{
+    const r=await api('/api/ai/rollback',{method:'POST',body:{snapId}});
+    alert('Rollback completed!\nRestored '+r.restored+' file(s).'+(r.errors.length?'\nErrors:\n'+r.errors.join('\n'):''));
+    loadSnapshots();
+  }catch(e){
+    alert('Rollback failed: '+e.message);
+  }
+}
+
+function renderSecrets(){
+  const p=$('#p-secrets');
+  p.replaceChildren(
+    h('h3',{style:'color:#00f0ff;display:flex;align-items:center;gap:6px'},icon('key'),' Exposed Passwords, API Keys & Database Secrets'),
+    h('p',{class:'muted',text:'Rotate these secrets immediately if your project was exposed to the web or untrusted servers. Click any row to jump directly to the code line.'}),
+    (R.secrets.length||R.keys.length)?h('table',{},
+      h('tr',{},h('th',{text:'Secret Type'}),h('th',{text:'File & Line'}),h('th',{text:'Masked Value'}),h('th',{text:'Action'})),
+      ...R.secrets.map(s=>h('tr',{class:'f',onclick:()=>openByPath(s.file,s.line)},h('td',{class:'mono',style:'color:#ffd000',text:s.key}),h('td',{class:'mono',text:s.file+':'+s.line}),h('td',{class:'mono',text:s.masked}),h('td',{},h('span',{class:'chip',text:'Exposed Secret'})))),
+      ...R.keys.map(s=>h('tr',{class:'f',onclick:()=>openByPath(s.file,s.line)},h('td',{style:'color:#ffd000',text:s.type}),h('td',{class:'mono',text:s.file+':'+s.line}),h('td',{class:'mono',text:s.masked}),h('td',{},h('span',{class:'chip',text:'API Key'}))))
+    ):h('p',{text:'No leaked keys or secrets found in the codebase.'})
+  );
+}
+
+function renderFix(){
+  $('#p-fix').replaceChildren(
+    h('h3',{style:'color:#00ff88;display:flex;align-items:center;gap:6px'},icon('tool'),' How to Clean & Protect Your Laravel Application'),
+    h('ol',{style:'line-height:1.7'},R.remediation.map(x=>h('li',{style:'margin-bottom:12px'},h('b',{style:'font-size:14px;color:var(--t)',text:x.title}),h('div',{class:'muted',style:'margin-top:2px',text:x.detail}))))
+  );
+}
+
+async function renderQuar(){
+  const q=await api('/api/quarantines');
+  $('#p-quar').replaceChildren(
+    h('h3',{style:'color:#00f0ff;display:flex;align-items:center;gap:6px'},icon('box'),' Quarantine Vault'),
+    h('p',{class:'muted',text:'Dangerous files are safely moved out of your web directory and locked with read-only permissions (0400). Nothing is deleted.'}),
+    q.length?q.map(x=>h('div',{class:'fnd'},h('b',{text:x.id}),' · '+x.files.length+' file(s) isolated',h('div',{class:'mono muted',style:'margin:6px 0',text:x.folder}),h('button',{onclick:async()=>{const r=await api('/api/restore',{method:'POST',body:{id:x.id}});alert('Restored '+r.restored+' file(s).'+(r.errors.length?'\n\nErrors:\n'+r.errors.join('\n'):''));renderQuar()}},icon('rotateCcw'),' Restore Files'))):h('p',{text:'Quarantine vault is currently empty.'})
+  );
+}
 
 let FIND=null,FCAT='all',FQ='';
 function openByPath(path,line){const f=R.files.find(x=>x.path===path);if(f)openFile(f.id,line)}
+
 async function renderFind(){
- const p=$('#p-find');
- if(!FIND){p.replaceChildren(h('p',{class:'muted',text:'Loading detections…'}));FIND=await api('/api/findings')}
- const cats=[['all','All Detections'],['code','Backdoors & WebShells'],['secrets','🔑 Keys & Secrets'],['image','🖼 Image Polyglots'],['config','⚙ Config Issues'],['laravel','Laravel Settings']];
- const CODE=['backdoor','obfuscation','polyglot','c2','seo-spam','js-malware','miner','htaccess'];
- const ok=f=>(FCAT==='all'||(FCAT==='code'?CODE.includes(f.cat):f.cat===FCAT))&&(!FQ||(f.path+' '+f.title+' '+f.snippet).toLowerCase().includes(FQ));
- const rs=FIND.filter(ok);
- const q=h('input',{type:'text',class:'grow',placeholder:'Filter detections…',value:FQ});
- q.oninput=e=>{FQ=e.target.value.toLowerCase();clearTimeout(window._ft);window._ft=setTimeout(renderFind,200)};
- p.replaceChildren(
-   h('div',{class:'row',style:'margin-bottom:12px'},cats.map(([k,l])=>h('button',{class:k===FCAT?'pri':'',onclick:()=>{FCAT=k;renderFind()}},l)),q),
-   h('div',{class:'scroll'},h('table',{},
-     h('thead',{},h('tr',{},h('th',{text:'Severity'}),h('th',{text:'File & Line'}),h('th',{text:'Threat Name'}),h('th',{text:'Matching Code Snippet'}))),
-     h('tbody',{},rs.slice(0,600).map(f=>h('tr',{class:'f',onclick:()=>openFile(f.id,f.line)},
-       h('td',{},badge(f.sev)),
-       h('td',{class:'mono',style:'color:#00f0ff',text:f.path+(f.line?':'+f.line:'')}),
-       h('td',{style:'font-weight:600',text:f.title}),
-       h('td',{class:'mono muted',text:f.snippet})
-     )))
-   )),
-   h('div',{class:'muted',style:'margin-top:10px',text:rs.length+' detection(s) found'})
- );
+  const p=$('#p-find');
+  if(!FIND){p.replaceChildren(h('p',{class:'muted',text:'Loading detections…'}));FIND=await api('/api/findings')}
+  const cats=[['all','All Detections'],['code','Backdoors & WebShells'],['secrets','Keys & Secrets'],['image','Image Polyglots'],['config','Config Issues'],['laravel','Laravel Settings']];
+  const CODE=['backdoor','obfuscation','polyglot','c2','seo-spam','js-malware','miner','htaccess'];
+  const ok=f=>(FCAT==='all'||(FCAT==='code'?CODE.includes(f.cat):f.cat===FCAT))&&(!FQ||(f.path+' '+f.title+' '+f.snippet).toLowerCase().includes(FQ));
+  const rs=FIND.filter(ok);
+  const q=h('input',{type:'text',class:'grow',placeholder:'Filter detections…',value:FQ});
+  q.oninput=e=>{FQ=e.target.value.toLowerCase();clearTimeout(window._ft);window._ft=setTimeout(renderFind,200)};
+  p.replaceChildren(
+    h('div',{class:'row',style:'margin-bottom:12px'},cats.map(([k,l])=>h('button',{class:k===FCAT?'pri':'',onclick:()=>{FCAT=k;renderFind()}},l)),q),
+    h('div',{class:'scroll'},h('table',{},
+      h('thead',{},h('tr',{},h('th',{text:'Severity'}),h('th',{text:'File & Line'}),h('th',{text:'Threat Name'}),h('th',{text:'Matching Code Snippet'}))),
+      h('tbody',{},rs.slice(0,600).map(f=>h('tr',{class:'f',onclick:()=>openFile(f.id,f.line)},
+        h('td',{},badge(f.sev)),
+        h('td',{class:'mono',style:'color:#00f0ff',text:f.path+(f.line?':'+f.line:'')}),
+        h('td',{style:'font-weight:600',text:f.title}),
+        h('td',{class:'mono muted',text:f.snippet})
+      )))
+    )),
+    h('div',{class:'muted',style:'margin-top:10px',text:rs.length+' detection(s) found'})
+  );
 }
 
-let mp='';async function mload(p){const d=await api('/api/browse?path='+encodeURIComponent(p));mp=d.path;$('#mpath').textContent=d.path+(d.laravel?'  ✓ Laravel project':'');
- $('#mlist').replaceChildren(h('div',{class:'dir',onclick:()=>mload(d.parent)},'⬆ ..'),...d.dirs.map(x=>h('div',{class:'dir',onclick:()=>mload(d.path+'/'+x.name)},'📁 '+x.name+(x.laravel?'  ✓':''))))}
+let mp='';
+async function mload(p){
+  const d=await api('/api/browse?path='+encodeURIComponent(p));mp=d.path;$('#mpath').textContent=d.path+(d.laravel?'  ✓ Laravel project':'');
+  $('#mlist').replaceChildren(h('div',{class:'dir',onclick:()=>mload(d.parent)},'⬆ ..'),...d.dirs.map(x=>h('div',{class:'dir',onclick:()=>mload(d.path+'/'+x.name)},icon('folder'),' '+x.name+(x.laravel?'  ✓':''))));
+}
 $('#browse').onclick=()=>{mload($('#path').value||'~');$('#modal').classList.add('open')};
 $('#mcancel').onclick=()=>$('#modal').classList.remove('open');
 $('#muse').onclick=()=>{$('#path').value=mp;$('#modal').classList.remove('open')};
@@ -2228,6 +2733,42 @@ def cli_scan(path, a):
     if a.json:
         json.dump(r, open(a.json, "w"), indent=1)
         print("JSON report written to", a.json)
+
+    if getattr(a, "agent_json", False):
+        agent_payload = {
+            "verdict": r["verdict"],
+            "counts": r["counts"],
+            "files": [
+                {
+                    "path": f["path"],
+                    "sev": f["sev"],
+                    "findings": [{"rule": x["rule"], "title": x["title"], "line": x["line"], "snippet": x["snippet"]} for x in f["findings"]],
+                    "ai_recommendation": ai_analyze_file(path, f["path"], file_obj=f)
+                } for f in r["files"]
+            ]
+        }
+        print(json.dumps(agent_payload, indent=2))
+        return r
+
+    if getattr(a, "ai_analyze", False):
+        print("\n--- Agentic AI Security Triage ---")
+        ai_results = [ai_analyze_file(path, f["path"], file_obj=f) for f in r["files"][:40]]
+        for item in ai_results:
+            print("[%s] %s -> %s: %s" % (item["verdict"], item["path"], item["action"].upper(), item["explanation"]))
+            if item.get("diff"):
+                print("  " + item["diff"].replace("\n", "\n  "))
+        return r
+
+    if getattr(a, "ai_fix", False):
+        print("\n--- Agentic AI Automated Safe Remediation ---")
+        ai_results = [ai_analyze_file(path, f["path"], file_obj=f) for f in r["files"][:40]]
+        for item in ai_results:
+            try:
+                res = ai_apply_fix(path, item)
+                print("✓ Remediated: %s (%s) - snapshot: %s" % (item["path"], res["action"], res["snapshot_id"]))
+            except Exception as e:
+                print("✗ Failed %s: %s" % (item["path"], e))
+        return r
 
     fail_on = getattr(a, "fail_on", None)
     if fail_on:
@@ -2334,7 +2875,7 @@ def run_gui(path="", autotest=False):
     # ------------------------------------------------------------------ top bar
     top = ttk.Frame(root, padding=(12, 10, 12, 4))
     top.pack(fill="x")
-    ttk.Label(top, text="🛡  Laravel Sentinel", font=("Helvetica", 15, "bold")).pack(side="left", padx=(0, 14))
+    ttk.Label(top, text="Laravel Sentinel", font=("Helvetica", 15, "bold")).pack(side="left", padx=(0, 14))
     pathv = tk.StringVar(value=os.path.abspath(os.path.expanduser(path)) if path else "")
     pe = ttk.Entry(top, textvariable=pathv)
     pe.pack(side="left", fill="x", expand=True)
@@ -2739,6 +3280,10 @@ def main():
     ap.add_argument("--cli", action="store_true", help="headless scan, print summary")
     ap.add_argument("--json", help="with --cli: write the full report to this file")
     ap.add_argument("--fail-on", choices=["critical", "high", "medium", "any"], help="exit with code 1 if findings meet/exceed this severity")
+    ap.add_argument("--ai-analyze", action="store_true", help="run agentic AI security triage on detected malware")
+    ap.add_argument("--ai-fix", action="store_true", help="run agentic AI and auto-quarantine/patch with safety snapshot")
+    ap.add_argument("--ai-rollback", metavar="SNAP_ID", help="rollback project to a specific .sentinel_backups snapshot")
+    ap.add_argument("--agent-json", action="store_true", help="output clean machine-readable JSON for AI coding agents")
     ap.add_argument("--generate-htaccess", metavar="DIR", help="generate hardened .htaccess blocking script execution in given folder and exit")
     ap.add_argument("--deep", action="store_true")
     ap.add_argument("--baseline", help="folder holding a clean copy of vendor/ to compare against")
@@ -2747,6 +3292,11 @@ def main():
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
+    if a.ai_rollback:
+        root_dir = os.path.abspath(os.path.expanduser(a.path or "."))
+        res = rollback_snapshot(root_dir, a.ai_rollback)
+        print(json.dumps(res, indent=2))
+        return
     if a.generate_htaccess:
         target = os.path.abspath(os.path.expanduser(a.generate_htaccess))
         if not os.path.isdir(target):
@@ -2754,6 +3304,8 @@ def main():
         out = generate_hardened_htaccess(target)
         print("Hardened .htaccess generated at: %s" % out)
         return
+    if a.ai_analyze or a.ai_fix or a.agent_json:
+        a.cli = True
     if a.cli:
         if not a.path:
             ap.error("--cli needs a project path")

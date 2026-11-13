@@ -21,6 +21,11 @@ Zero external dependencies • Standard library only (Python 3.8+) • Safe & st
 * **Polyglot & Image Header Inspection**: Inspects JPEG segments (`APP*`, `COM` comments) and PNG chunks (`tEXt`, `zTXt`, `iTXt`) for embedded PHP code or payloads appended after EOF markers (`FF D9`, `IEND`).
 * **Secret & Credential Harvesting**: Finds exposed API keys (AWS, Google, Stripe, Slack, GitHub, SendGrid, private keys, JWTs) and masks values for privacy.
 * **Non-Destructive Quarantine**: Safely isolates flagged files into `<project>_QUARANTINE/<timestamp>` with read-only permissions (`0400`) and a JSON audit manifest, with one-click restore.
+* **Agentic AI Analyst & Safe Auto-Fix Engine**:
+  * Evaluates and triages detected threats using Multi-Provider AI (Google Gemini, OpenAI, local Ollama, or built-in deterministic heuristic rulebook).
+  * Pinpoints false positives vs confirmed webshells and proposes safe patches.
+  * **Automatic Safety Snapshots**: Always creates an immutable snapshot in `.sentinel_backups/<timestamp>/` before modifying or quarantining files, with 1-click rollback.
+  * **Autonomous Agent CLI Protocol (`--agent-json`)**: Structured tool integration for AI agents (Antigravity, Cursor, Claude Code).
 * **Three Operating Modes**:
   1. **Desktop GUI** (Tkinter) with dark theme and syntax highlighting.
   2. **Local Web UI** (Single-page app on `127.0.0.1` protected by a cryptographically random session token).
