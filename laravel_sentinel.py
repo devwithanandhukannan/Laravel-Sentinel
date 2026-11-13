@@ -1791,73 +1791,130 @@ INDEX_HTML = r"""<!doctype html><html lang="en"><head><meta charset="utf-8"><met
 <title>Laravel Sentinel — Malware Scanner &amp; Security Triage</title>
 <style>
 :root{
-  --bg:#090d16;--p:#111827;--p2:#1f2937;--p3:#374151;--b:#2d3748;--b2:#475569;
-  --t:#f8fafc;--m:#94a3b8;--a:#38bdf8;--a-glow:rgba(56,189,248,0.2);
-  --crit:#f43f5e;--crit-bg:rgba(244,63,94,0.12);
-  --high:#fb923c;--high-bg:rgba(251,146,60,0.12);
-  --med:#facc15;--med-bg:rgba(250,204,21,0.12);
-  --low:#60a5fa;--low-bg:rgba(96,165,250,0.12);
-  --info:#94a3b8;--info-bg:rgba(148,163,184,0.12);
-  --ok:#4ade80;--ok-bg:rgba(74,222,128,0.12);
-  --radius:10px;
+  --bg:#000000;--p:#09090b;--p2:#121215;--p3:#1a1a1e;
+  --b:#222225;--b2:#38383e;--b-bright:#ffffff;
+  --t:#ffffff;--m:#88888e;--faint:#44444a;
+  --a:#ffffff;
+  --crit:#ffffff;--high:#e4e4e7;--med:#a1a1aa;--low:#71717a;--info:#52525b;--ok:#ffffff;
+  --radius:6px;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--t);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--b);background:var(--p);box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+body{margin:0;background:var(--bg);color:var(--t);font:13.5px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--b);background:var(--p)}
 .brand{display:flex;align-items:center;gap:12px}
-.brand h1{font-size:17px;font-weight:700;margin:0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
-.brand span.ver{font-size:11px;font-weight:600;padding:2px 7px;background:var(--p2);border:1px solid var(--b);border-radius:12px;color:var(--a)}
-.brand small{color:var(--m);font-size:12px}
-.shield{font-size:22px;line-height:1}
+.logo-mark{width:26px;height:26px;background:#ffffff;color:#000000;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;border-radius:4px;letter-spacing:-0.03em}
+.brand h1{font-size:15px;font-weight:700;margin:0;letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.brand span.ver{font-size:10px;font-weight:600;padding:1px 6px;border:1px solid var(--b2);border-radius:10px;color:var(--m);letter-spacing:0}
+.brand small{color:var(--m);font-size:11.5px;letter-spacing:0}
 main{padding:20px 24px;max-width:1560px;margin:auto}
-.card{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:16px;margin-bottom:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -2px rgba(0,0,0,0.1)}
+.card{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:16px;margin-bottom:16px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input[type=text],input[type=date],select,textarea{background:var(--p2);border:1px solid var(--b);color:var(--t);border-radius:8px;padding:9px 12px;font:inherit;outline:none;transition:border-color .15s,box-shadow .15s}
-input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--a);box-shadow:0 0 0 3px var(--a-glow)}
+input[type=text],input[type=date],select,textarea{background:var(--p2);border:1px solid var(--b);color:var(--t);border-radius:var(--radius);padding:8px 12px;font:inherit;font-size:13px;outline:none;transition:border-color .15s}
+input[type=text]:focus,input[type=date]:focus,select:focus{border-color:#ffffff}
 input.grow{flex:1;min-width:280px}
-button{background:var(--p2);color:var(--t);border:1px solid var(--b);border-radius:8px;padding:9px 15px;cursor:pointer;font:inherit;font-weight:500;display:inline-flex;align-items:center;gap:6px;transition:all .15s;user-select:none}
+button{background:var(--p2);color:var(--t);border:1px solid var(--b);border-radius:var(--radius);padding:8px 14px;cursor:pointer;font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;transition:all .15s;user-select:none}
 button:hover{border-color:var(--b2);background:var(--p3)}
-button.pri{background:#0284c7;border-color:#0284c7;color:#fff;font-weight:600}
-button.pri:hover{background:#0369a1;border-color:#0369a1}
-button.danger{background:#991b1b;border-color:#991b1b;color:#fff;font-weight:600}
-button.danger:hover{background:#7f1d1d;border-color:#7f1d1d}
-button:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
-label.opt{color:var(--m);display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;user-select:none}
-.bar{height:6px;background:var(--p2);border-radius:99px;overflow:hidden;margin-top:12px}
-.bar>div{height:100%;background:linear-gradient(90deg,#0284c7,#38bdf8);width:0;transition:width .25s ease-out;border-radius:99px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-.stat{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:14px;cursor:pointer;transition:transform .15s,border-color .15s;position:relative;overflow:hidden}
-.stat:hover{border-color:var(--b2);transform:translateY(-1px)}
-.stat b{font-size:28px;font-weight:800;display:block;letter-spacing:-0.02em;line-height:1.2}
-.stat span{color:var(--m);font-size:12px;font-weight:500;margin-top:2px;display:block}
-.stat.on{border-color:var(--a);box-shadow:0 0 0 2px var(--a-glow);background:var(--p2)}
-.crit{color:var(--crit)}.high{color:var(--high)}.med{color:var(--med)}.low{color:var(--low)}.info{color:var(--info)}
-.verdict{padding:14px 18px;border-radius:var(--radius);margin-bottom:14px;font-size:15px;display:flex;gap:12px;align-items:center;border-left-width:5px;border-left-style:solid}
-.verdict.COMPROMISED{background:var(--crit-bg);border:1px solid rgba(244,63,94,0.3);border-left-color:var(--crit);color:#fecdd3}
-.verdict.SUSPICIOUS{background:var(--high-bg);border:1px solid rgba(251,146,60,0.3);border-left-color:var(--high);color:#fed7aa}
-.verdict.REVIEW{background:var(--med-bg);border:1px solid rgba(250,204,21,0.3);border-left-color:var(--med);color:#fef08a}
-.verdict.CLEAN{background:var(--ok-bg);border:1px solid rgba(74,222,128,0.3);border-left-color:var(--ok);color:#bbf7d0}
-.tabs{display:flex;gap:6px;border-bottom:1px solid var(--b);margin-bottom:14px;flex-wrap:wrap;padding-bottom:2px}
-.tab{padding:8px 16px;cursor:pointer;color:var(--m);border-radius:8px;font-weight:500;font-size:13px;transition:all .15s}
-.tab:hover{color:var(--t);background:var(--p2)}
-.tab.on{color:#fff;background:var(--p2);border:1px solid var(--b2);font-weight:600}
-table{width:100%;border-collapse:separate;border-spacing:0}
-th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--b);vertical-align:middle}
-th{color:var(--m);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;position:sticky;top:0;background:var(--p);z-index:2}
+button.pri{background:#ffffff;border-color:#ffffff;color:#000000;font-weight:600}
+button.pri:hover{background:#e4e4e7;border-color:#e4e4e7}
+button.danger{background:transparent;border:1px solid #71717a;color:#ffffff}
+button.danger:hover{border-color:#ffffff;background:#18181b}
+button:disabled{opacity:.35;cursor:not-allowed}
+label.opt{color:var(--m);display:flex;gap:8px;align-items:center;font-size:12.5px;cursor:pointer;user-select:none}
+.bar{height:3px;background:var(--p2);border-radius:2px;overflow:hidden;margin-top:12px}
+.bar>div{height:100%;background:#ffffff;width:0;transition:width .2s ease-out}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.stat{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:14px;cursor:pointer;transition:border-color .15s,background .15s}
+.stat:hover{border-color:var(--b2)}
+.stat b{font-size:26px;font-weight:700;display:block;letter-spacing:-0.03em;line-height:1.2;color:#ffffff}
+.stat span{color:var(--m);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-top:4px;display:block}
+.stat.on{border-color:#ffffff;background:var(--p2)}
+.crit,.high,.med,.low,.info{color:#ffffff}
+.verdict{padding:14px 18px;border-radius:var(--radius);margin-bottom:14px;font-size:14px;display:flex;gap:12px;align-items:center;background:var(--p);border:1px solid var(--b2)}
+.verdict.COMPROMISED{border-color:#ffffff}
+.verdict.COMPROMISED b{background:#ffffff;color:#000000;padding:2px 8px;border-radius:3px;font-size:11px;letter-spacing:0.06em;font-weight:700}
+.verdict.SUSPICIOUS b{border:1px solid #ffffff;color:#ffffff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:700}
+.verdict.REVIEW b{border:1px solid var(--m);color:var(--m);padding:2px 8px;border-radius:3px;font-size:11px;font-weight:700}
+.verdict.CLEAN b{border:1px solid var(--b2);color:#ffffff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:700}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--b);margin-bottom:14px;flex-wrap:wrap}
+.tab{padding:8px 14px;cursor:pointer;color:var(--m);border-bottom:2px solid transparent;font-size:13px;font-weight:500;transition:color .15s,border-color .15s}
+.tab:hover{color:var(--t)}
+.tab.on{color:#ffffff;border-bottom-color:#ffffff;font-weight:600}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--b);vertical-align:middle}
+th{color:var(--m);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;position:sticky;top:0;background:var(--p);z-index:2}
 tr.f{cursor:pointer;transition:background .1s}
 tr.f:hover{background:var(--p2)}
-code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12.5px}
-.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em}
-.badge.critical{background:var(--crit-bg);color:var(--crit);border:1px solid rgba(244,63,94,0.4)}
-.badge.high{background:var(--high-bg);color:var(--high);border:1px solid rgba(251,146,60,0.4)}
-.badge.medium{background:var(--med-bg);color:var(--med);border:1px solid rgba(250,204,21,0.4)}
-.badge.low{background:var(--low-bg);color:var(--low);border:1px solid rgba(96,165,250,0.4)}
-.badge.info{background:var(--info-bg);color:var(--info);border:1px solid rgba(148,163,184,0.4)}
-.chip{display:inline-flex;align-items:center;background:var(--p2);border:1px solid var(--b);border-radius:99px;padding:1px 8px;font-size:11px;color:var(--m);margin:0 4px 4px 0}
-.scroll{max-height:64vh;overflow:auto;border-radius:8px;border:1px solid var(--b)}
-#drawer{position:fixed;top:0;right:-800px;width:780px;max-width:96vw;height:100%;background:var(--p);border-left:1px solid var(--b);box-shadow:-12px 0 40px rgba(0,0,0,0.6);transition:right .22s cubic-bezier(0.16,1,0.3,1);z-index:30;display:flex;flex-direction:column}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em}
+.badge.critical{background:#ffffff;color:#000000}
+.badge.high{border:1px solid #ffffff;color:#ffffff;background:transparent}
+.badge.medium{border:1px solid #71717a;color:#d4d4d8;background:transparent}
+.badge.low{border:1px solid #3f3f46;color:#a1a1aa;background:transparent}
+.badge.info{border:1px solid #27272a;color:#71717a;background:transparent}
+.chip{display:inline-flex;align-items:center;background:transparent;border:1px solid var(--b);border-radius:3px;padding:1px 6px;font-size:11px;color:var(--m);margin:0 4px 4px 0}
+.scroll{max-height:64vh;overflow:auto;border-radius:var(--radius);border:1px solid var(--b)}
+#drawer{position:fixed;top:0;right:-820px;width:800px;max-width:96vw;height:100%;background:#09090b;border-left:1px solid var(--b);box-shadow:-20px 0 50px rgba(0,0,0,0.8);transition:right .22s cubic-bezier(0.16,1,0.3,1);z-index:30;display:flex;flex-direction:column}
 #drawer.open{right:0}
-#dh{padding:14px 18px;border-bottom:1px solid var(--b);display:flex;gap:12px;align-items:center;background:var(--p2)}
+#dh{padding:14px 18px;border-bottom:1px solid var(--b);display:flex;gap:12px;align-items:center;background:#0c0c0e}
+#db{padding:16px 18px;overflow:auto;flex:1}
+.src{background:#000000;border:1px solid var(--b);border-radius:var(--radius);overflow:auto;max-height:68vh}
+.ln{display:flex;white-space:pre;font-family:ui-monospace,Menlo,Monaco,monospace;font-size:12px;line-height:1.5}
+.ln i{color:#52525b;min-width:48px;text-align:right;padding:0 12px;font-style:normal;user-select:none;border-right:1px solid #18181b}
+.ln.hl{background:rgba(255,255,255,0.08);color:#ffffff}
+.ln.flash{background:rgba(255,255,255,0.18)}
+.fnd{border:1px solid var(--b);border-radius:var(--radius);padding:12px;margin-bottom:10px;background:var(--p2)}
+.fnd p{margin:6px 0;color:var(--m);font-size:12.5px}
+pre.dec{background:#000000;border:1px solid var(--b);border-radius:var(--radius);padding:12px;overflow:auto;max-height:50vh;white-space:pre-wrap;word-break:break-all;font-size:12px;font-family:ui-monospace,Menlo,monospace;color:#ffffff}
+.chain{color:#ffffff;font-weight:600;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:40}
+#modal.open{display:flex}
+#mbox{background:var(--p);border:1px solid var(--b2);border-radius:8px;width:680px;max-width:94vw;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.7)}
+#mbox .l{overflow:auto;padding:8px 12px;flex:1}
+.dir{padding:7px 10px;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .1s}
+.dir:hover{background:var(--p2)}
+.tl{display:flex;align-items:flex-end;gap:3px;height:110px;border-bottom:1px solid var(--b);margin-bottom:12px;padding-top:10px}
+.tl div{flex:1;background:#18181b;min-width:4px;position:relative}
+.tl div i{position:absolute;bottom:0;left:0;right:0;background:#ffffff}
+.muted{color:var(--m)}.hide{display:none}
+</style></head><body>
+<header>
+  <div class="brand">
+    <div class="logo-mark">S</div>
+    <div>
+      <h1>Laravel Sentinel <span class="ver">v2.1</span></h1>
+      <small>Local Malware Scanner &amp; Deep Deobfuscation</small>
+    </div>
+  </div>
+  <div class="row">
+    <span class="chip" style="margin:0;letter-spacing:0.04em">READ-ONLY ENGINE</span>
+  </div>
+</header>
+<main>
+<div class="card">
+  <div class="row"><input id="path" class="grow" type="text" placeholder="/path/to/laravel-project"><button id="browse">Browse…</button>
+  <button id="scan" class="pri">Scan project</button><button id="cancel" class="hide">Stop</button></div>
+  <div class="row" style="margin-top:10px">
+    <label class="opt"><input type="checkbox" id="deep"> Deep scan vendor &amp; node_modules assets</label>
+    <input id="baseline" type="text" class="grow" style="max-width:360px" placeholder="Optional: clean vendor copy for hash comparison">
+    <input id="custom" type="text" class="grow" style="max-width:300px" placeholder="Extra indicators (comma separated)">
+  </div>
+  <div id="prog" class="hide"><div class="bar"><div id="pbar"></div></div><div class="muted mono" id="ptxt" style="margin-top:6px"></div></div>
+  <div id="err" class="crit hide" style="margin-top:8px"></div>
+</div>
+<div id="out" class="hide">
+  <div id="verdict" class="verdict"></div>
+  <div class="cards" id="cards"></div>
+  <div style="height:14px"></div>
+  <div class="tabs" id="tabs"><div class="tab on" data-t="files">Files</div><div class="tab" data-t="find">All findings (line view)</div><div class="tab" data-t="timeline">Timeline</div><div class="tab" data-t="iocs">Indicators</div><div class="tab" data-t="secrets">Secrets to rotate</div><div class="tab" data-t="fix">Remediation</div><div class="tab" data-t="upg">Upgrade</div><div class="tab" data-t="quar">Quarantine</div></div>
+  <div id="p-files" class="card">
+    <div class="row" style="margin-bottom:10px"><input id="q" type="text" class="grow" placeholder="Filter by path or finding…"><select id="cat"><option value="">All categories</option></select><input id="since" type="date" title="Only files modified on/after"><button id="selhigh">Select Critical + High</button><button id="qbtn" class="danger" disabled>Quarantine selected (0)</button><button id="xj">Export JSON</button><button id="xh">Export HTML</button></div>
+    <div class="scroll"><table><thead><tr><th></th><th>Severity</th><th>File</th><th>Why flagged</th><th>Size</th><th>Modified</th></tr></thead><tbody id="rows"></tbody></table></div><div id="more" class="muted" style="margin-top:8px"></div>
+  </div>
+  <div id="p-find" class="card hide"></div><div id="p-upg" class="card hide"></div><div id="p-timeline" class="card hide"></div><div id="p-iocs" class="card hide"></div><div id="p-secrets" class="card hide"></div><div id="p-fix" class="card hide"></div><div id="p-quar" class="card hide"></div>
+</div>
+</main>
+<div id="drawer"><div id="dh"><button id="dclose">✕</button><div style="min-width:0"><div id="dtitle" class="mono" style="word-break:break-all"></div></div></div><div id="db"></div></div>
+<div id="modal"><div id="mbox"><div style="padding:12px 14px;border-bottom:1px solid var(--b)" class="row"><b>Choose project folder</b><span id="mpath" class="mono muted" style="flex:1;word-break:break-all"></span></div><div class="l" id="mlist"></div><div class="row" style="padding:12px 14px;border-top:1px solid var(--b);justify-content:flex-end"><button id="mcancel">Cancel</button><button id="muse" class="pri">Use this folder</button></div></div></div>
 #db{padding:16px 18px;overflow:auto;flex:1}
 .src{background:#06080e;border:1px solid var(--b);border-radius:8px;overflow:auto;max-height:68vh}
 .ln{display:flex;white-space:pre;font-family:ui-monospace,Menlo,Monaco,monospace;font-size:12px;line-height:1.45}
@@ -2034,8 +2091,8 @@ def run_gui(path="", autotest=False):
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox
 
-    BG, P, P2, BD, TX, MU = "#0e1116", "#161b22", "#1d242d", "#2a323d", "#e6edf3", "#8b98a8"
-    SEVC = {"critical": "#ff5d5d", "high": "#ff9a3d", "medium": "#e3c04a", "low": "#6cb6ff", "info": "#8b98a8"}
+    BG, P, P2, BD, TX, MU = "#000000", "#09090b", "#141416", "#27272a", "#ffffff", "#a1a1aa"
+    SEVC = {"critical": "#ffffff", "high": "#e4e4e7", "medium": "#d4d4d8", "low": "#a1a1aa", "info": "#71717a"}
     MONO = ("Menlo", 11) if sys.platform == "darwin" else ("Consolas", 10) if os.name == "nt" else ("DejaVu Sans Mono", 10)
     root = tk.Tk()
     root.title("%s %s" % (APP, VERSION))
@@ -2052,17 +2109,17 @@ def run_gui(path="", autotest=False):
     st.configure("Card.TLabel", background=P, foreground=TX)
     st.configure("TButton", background=P2, foreground=TX, padding=(10, 6), borderwidth=1)
     st.map("TButton", background=[("active", "#26303c"), ("disabled", BG)], foreground=[("disabled", MU)])
-    st.configure("Accent.TButton", background="#1f6feb", foreground="white", font=("Helvetica", 10, "bold"))
-    st.map("Accent.TButton", background=[("active", "#388bfd"), ("disabled", "#17407a")])
-    st.configure("Danger.TButton", background="#6e1b1b", foreground="white")
-    st.map("Danger.TButton", background=[("active", "#8e2424"), ("disabled", BG)])
+    st.configure("Accent.TButton", background="#ffffff", foreground="#000000", font=("Helvetica", 10, "bold"))
+    st.map("Accent.TButton", background=[("active", "#e4e4e7"), ("disabled", "#27272a")], foreground=[("disabled", "#71717a")])
+    st.configure("Danger.TButton", background="#18181b", foreground="#ffffff", borderwidth=1)
+    st.map("Danger.TButton", background=[("active", "#27272a"), ("disabled", BG)])
     st.configure("TNotebook", background=BG, borderwidth=0)
     st.configure("TNotebook.Tab", background=P, foreground=MU, padding=(14, 7))
     st.map("TNotebook.Tab", background=[("selected", P2)], foreground=[("selected", TX)])
     st.configure("Treeview", background=P, fieldbackground=P, foreground=TX, rowheight=24, borderwidth=0)
     st.configure("Treeview.Heading", background=P2, foreground=MU, relief="flat", padding=(6, 5))
-    st.map("Treeview", background=[("selected", "#264f78")], foreground=[("selected", "#ffffff")])
-    st.configure("TProgressbar", background="#58a6ff", troughcolor=P2, borderwidth=0)
+    st.map("Treeview", background=[("selected", "#27272a")], foreground=[("selected", "#ffffff")])
+    st.configure("TProgressbar", background="#ffffff", troughcolor=P2, borderwidth=0)
     st.configure("TEntry", fieldbackground=P2, foreground=TX, insertcolor=TX, padding=5)
     st.configure("TCheckbutton", background=BG, foreground=MU)
     st.configure("TCombobox", fieldbackground=P2, background=P2, foreground=TX, arrowcolor=TX)
