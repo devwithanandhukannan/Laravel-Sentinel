@@ -63,8 +63,9 @@ rule("R003", "high", "Dynamic function call from request input",
      "Calling a function whose name/arguments come from the request is a webshell trait.", cat="backdoor")
 rule("R004", "high", "preg_replace with /e modifier (code execution)",
      r"preg_replace\s*\(\s*(['\"]).{1,200}?/[a-z]*e[a-z]*\1", "The /e modifier evaluates the replacement as PHP.", cat="backdoor")
-rule("R005", "high", "__halt_compiler() data tail",
-     r"__halt_compiler\s*\(\s*\)", "Raw binary appended after the script - used to hide a compressed payload.", cat="obfuscation")
+rule("R005", "critical", "__halt_compiler() data tail loader",
+     r"__halt_compiler(?:\s*/\*.*?\*/)*\s*\(\s*(?:/\*.*?\*/\s*)*\)",
+     "Raw binary appended after __halt_compiler() - used to hide a compressed payload.", cat="obfuscation")
 rule("R006", "critical", "include/require through a stream wrapper (zip:// phar:// data:// php://)",
      r"\b(?:include|require)(?:_once)?\b[^;\n]{0,80}?(?:zip|phar|data|expect|php)://",
      "Loads code straight out of an archive/stream so no .php payload file exists on disk.", cat="obfuscation")
@@ -76,9 +77,9 @@ rule("R008", "critical", "Known C2 / malicious infrastructure (from your report)
 rule("R009", "critical", "Crypter backdoor ('Lock' class eval of $_std)",
      r"\$view\s*=\s*eval\s*\(\s*\$_std\s*\)|function\s+check\s*\(\s*\$_std\s*\)",
      "Executes encrypted commands supplied by the attacker.", cat="backdoor")
-rule("R010", "high", "tmpfile()+include in-memory loader",
-     r"stream_get_meta_data\s*\(\s*\$\w+\s*\)\s*\[\s*['\"]uri['\"]\s*\]",
-     "Writes a decoded payload to a temp file and includes it, leaving no trace.", cat="obfuscation")
+rule("R010", "critical", "tmpfile()+include in-memory stream loader",
+     r"(?:stream_get_meta_data\s*\([^)]*\)[^;]{0,80}?['\"]uri['\"]|['\"]uri['\"][^;]{0,80}?(?:require|include)(?:_once)?\s*\(\s*\$[A-Za-z_])",
+     "Executes decoded code directly out of a memory stream/tempfile without writing to disk.", cat="backdoor")
 rule("R011", "high", "Remote code fetch and execute",
      r"\b(?:eval|include|require)(?:_once)?\s*\(?\s*(?:@\s*)?(?:file_get_contents|curl_exec|fopen)\s*\(",
      "Downloads code from elsewhere and runs it.", cat="backdoor")
@@ -125,6 +126,12 @@ rule("R029", "critical", "Callback code execution with request input",
 rule("R030", "critical", "PHP filter chain / wrapper abuse",
      r"php://filter/(?:convert\.(?:base64|iconv)|read=|resource=)",
      "PHP filter chain used in LFI-to-RCE exploit delivery.", cat="backdoor")
+rule("R031", "critical", "Hex-encoded dangerous function list (in-memory dropper)",
+     r"\b(?:666f70656e|746d7066696c65|73747265616d5f6765745f6d6574615f64617461|5f5f68616c745f636f6d70696c6572|677a696e666c617465)\b",
+     "Contains hex-encoded strings for fopen/tmpfile/stream_get_meta_data/__halt_compiler used by in-memory droppers.", cat="backdoor")
+rule("R032", "critical", "SEO cloaking search engine bot switcher",
+     r"\$bagent\s*=\s*['\"][^'\"]*?(?:Google|Yahoo|Docomo|Bing|Baidu)",
+     "Matches blackhat SEO cloaking code that serves different content to search engines.", cat="seo-spam")
 rule("J001", "high", "JS: eval of decoded string", r"\beval\s*\(\s*(?:atob|unescape|String\.fromCharCode)",
      "Obfuscated JavaScript loader.", targets=("js",), cat="js-malware")
 rule("J002", "high", "JS: document.write(unescape(...))", r"document\.write\s*\(\s*unescape",
@@ -503,7 +510,7 @@ CHAIN_RX = re.compile(r"((?:[A-Za-z_][A-Za-z_0-9]*\s*\(\s*@?\s*)+)(['\"])([^'\"\
 FUNC_RX = re.compile(r"([A-Za-z_][A-Za-z_0-9]*)\s*\(")
 LIT_RX = re.compile(r"(['\"])([A-Za-z0-9+/=_%\-\\]{60,})\1")
 BLOB_RX = re.compile(r"[A-Za-z0-9+/]{200,}={0,2}")
-HALT_RX = re.compile(rb"__halt_compiler\s*\(\s*\)\s*;", re.I)
+HALT_RX = re.compile(rb"__halt_compiler(?:\s*/\*.*?\*/)*\s*\(\s*(?:/\*.*?\*/\s*)*\)\s*;?", re.I | re.S)
 MAX_CAND = 25
 
 
@@ -1129,7 +1136,11 @@ class Scan:
                 continue
             done += 1
             tag = "zip:" + en
-            suspicious_name = e_ext in PHP_EXT or re.fullmatch(r"_+|[A-Za-z0-9_]{1,3}", en)
+            has_non_ascii = any(ord(c) > 127 for c in en)
+            suspicious_name = e_ext in PHP_EXT or re.fullmatch(r"_+|[A-Za-z0-9_]{1,3}", en) or has_non_ascii or re.search(r"[^\w.\-]", en)
+            if has_non_ascii:
+                self.add(rel, "high", "Z004", "Archive member '%s' has non-ASCII / obfuscated name" % en,
+                         "Obfuscated archive member names are used to hide payloads.", "obfuscation", layer=tag, st=st)
             if suspicious_name and (data[:5] == b"<?php" or b"<?php" in data[:200] or code_score(data) >= 2):
                 self.add(rel, "high", "Z003", "Archive member '%s' contains PHP code" % en,
                          "Matches the zip:// stream-wrapper loader technique.", "obfuscation", layer=tag, st=st)
@@ -1777,51 +1788,109 @@ class Handler(BaseHTTPRequestHandler):
 
 
 INDEX_HTML = r"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Laravel Sentinel</title>
+<title>Laravel Sentinel — Malware Scanner &amp; Security Triage</title>
 <style>
-:root{--bg:#0e1116;--p:#161b22;--p2:#1d242d;--b:#2a323d;--t:#e6edf3;--m:#8b98a8;--a:#58a6ff;--crit:#ff5d5d;--high:#ff9a3d;--med:#e3c04a;--low:#6cb6ff;--info:#8b98a8;--ok:#3fb950}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
-header{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--b);background:var(--p)}
-header h1{font-size:18px;margin:0}header small{color:var(--m)}.logo{font-size:22px}
-main{padding:18px 22px;max-width:1500px;margin:auto}
-.card{background:var(--p);border:1px solid var(--b);border-radius:10px;padding:14px;margin-bottom:14px}
+:root{
+  --bg:#090d16;--p:#111827;--p2:#1f2937;--p3:#374151;--b:#2d3748;--b2:#475569;
+  --t:#f8fafc;--m:#94a3b8;--a:#38bdf8;--a-glow:rgba(56,189,248,0.2);
+  --crit:#f43f5e;--crit-bg:rgba(244,63,94,0.12);
+  --high:#fb923c;--high-bg:rgba(251,146,60,0.12);
+  --med:#facc15;--med-bg:rgba(250,204,21,0.12);
+  --low:#60a5fa;--low-bg:rgba(96,165,250,0.12);
+  --info:#94a3b8;--info-bg:rgba(148,163,184,0.12);
+  --ok:#4ade80;--ok-bg:rgba(74,222,128,0.12);
+  --radius:10px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--b);background:var(--p);box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+.brand{display:flex;align-items:center;gap:12px}
+.brand h1{font-size:17px;font-weight:700;margin:0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+.brand span.ver{font-size:11px;font-weight:600;padding:2px 7px;background:var(--p2);border:1px solid var(--b);border-radius:12px;color:var(--a)}
+.brand small{color:var(--m);font-size:12px}
+.shield{font-size:22px;line-height:1}
+main{padding:20px 24px;max-width:1560px;margin:auto}
+.card{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:16px;margin-bottom:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -2px rgba(0,0,0,0.1)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input[type=text],input[type=date],select,textarea{background:var(--p2);border:1px solid var(--b);color:var(--t);border-radius:7px;padding:8px 10px;font:inherit}
-input.grow{flex:1;min-width:260px}
-button{background:var(--p2);color:var(--t);border:1px solid var(--b);border-radius:7px;padding:8px 14px;cursor:pointer;font:inherit}
-button:hover{border-color:var(--a)}button.pri{background:#1f6feb;border-color:#1f6feb;font-weight:600}button.danger{background:#6e1b1b;border-color:#a33}
-button:disabled{opacity:.5;cursor:not-allowed}
-label.opt{color:var(--m);display:flex;gap:6px;align-items:center}
-.bar{height:8px;background:var(--p2);border-radius:5px;overflow:hidden;margin-top:10px}.bar>div{height:100%;background:linear-gradient(90deg,#1f6feb,#58a6ff);width:0;transition:width .3s}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-.stat{background:var(--p);border:1px solid var(--b);border-radius:10px;padding:12px;cursor:pointer}.stat b{font-size:26px;display:block}.stat span{color:var(--m);font-size:12px}
-.stat.on{outline:2px solid var(--a)}
+input[type=text],input[type=date],select,textarea{background:var(--p2);border:1px solid var(--b);color:var(--t);border-radius:8px;padding:9px 12px;font:inherit;outline:none;transition:border-color .15s,box-shadow .15s}
+input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--a);box-shadow:0 0 0 3px var(--a-glow)}
+input.grow{flex:1;min-width:280px}
+button{background:var(--p2);color:var(--t);border:1px solid var(--b);border-radius:8px;padding:9px 15px;cursor:pointer;font:inherit;font-weight:500;display:inline-flex;align-items:center;gap:6px;transition:all .15s;user-select:none}
+button:hover{border-color:var(--b2);background:var(--p3)}
+button.pri{background:#0284c7;border-color:#0284c7;color:#fff;font-weight:600}
+button.pri:hover{background:#0369a1;border-color:#0369a1}
+button.danger{background:#991b1b;border-color:#991b1b;color:#fff;font-weight:600}
+button.danger:hover{background:#7f1d1d;border-color:#7f1d1d}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+label.opt{color:var(--m);display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;user-select:none}
+.bar{height:6px;background:var(--p2);border-radius:99px;overflow:hidden;margin-top:12px}
+.bar>div{height:100%;background:linear-gradient(90deg,#0284c7,#38bdf8);width:0;transition:width .25s ease-out;border-radius:99px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.stat{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:14px;cursor:pointer;transition:transform .15s,border-color .15s;position:relative;overflow:hidden}
+.stat:hover{border-color:var(--b2);transform:translateY(-1px)}
+.stat b{font-size:28px;font-weight:800;display:block;letter-spacing:-0.02em;line-height:1.2}
+.stat span{color:var(--m);font-size:12px;font-weight:500;margin-top:2px;display:block}
+.stat.on{border-color:var(--a);box-shadow:0 0 0 2px var(--a-glow);background:var(--p2)}
 .crit{color:var(--crit)}.high{color:var(--high)}.med{color:var(--med)}.low{color:var(--low)}.info{color:var(--info)}
-.verdict{padding:14px 18px;border-radius:10px;margin-bottom:14px;font-size:16px;display:flex;gap:12px;align-items:center}
-.verdict.COMPROMISED{background:#3b1313;border:1px solid var(--crit)}.verdict.SUSPICIOUS{background:#3a2410;border:1px solid var(--high)}.verdict.REVIEW{background:#38300f;border:1px solid var(--med)}.verdict.CLEAN{background:#10301a;border:1px solid var(--ok)}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--b);margin-bottom:12px;flex-wrap:wrap}
-.tab{padding:9px 16px;cursor:pointer;color:var(--m);border-bottom:2px solid transparent}.tab.on{color:var(--t);border-color:var(--a)}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--b);vertical-align:top}th{color:var(--m);font-weight:600;font-size:12px;position:sticky;top:0;background:var(--p)}
-tr.f{cursor:pointer}tr.f:hover{background:var(--p2)}
-code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
-.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;color:#111}
-.badge.critical{background:var(--crit)}.badge.high{background:var(--high)}.badge.medium{background:var(--med)}.badge.low{background:var(--low)}.badge.info{background:var(--info)}
-.chip{display:inline-block;background:var(--p2);border:1px solid var(--b);border-radius:12px;padding:1px 8px;font-size:11px;color:var(--m);margin:0 3px 3px 0}
-.scroll{max-height:62vh;overflow:auto}
-#drawer{position:fixed;top:0;right:-760px;width:740px;max-width:96vw;height:100%;background:var(--p);border-left:1px solid var(--b);box-shadow:-10px 0 30px #0008;transition:right .2s;z-index:20;display:flex;flex-direction:column}
-#drawer.open{right:0}#dh{padding:14px 16px;border-bottom:1px solid var(--b);display:flex;gap:10px;align-items:center}#db{padding:14px 16px;overflow:auto;flex:1}
-.src{background:#0a0d12;border:1px solid var(--b);border-radius:8px;overflow:auto;max-height:68vh}
-.ln{display:flex;white-space:pre;font-family:ui-monospace,Menlo,monospace;font-size:12px}.ln i{color:#566;min-width:46px;text-align:right;padding:0 10px;font-style:normal;user-select:none}.ln.hl{background:#4a1d1d}
-.fnd{border:1px solid var(--b);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--p2)}.fnd p{margin:4px 0;color:var(--m)}
-pre.dec{background:#0a0d12;border:1px solid var(--b);border-radius:8px;padding:10px;overflow:auto;max-height:50vh;white-space:pre-wrap;word-break:break-all;font-size:12px}
-.chain{color:var(--a);font-weight:600}
-#modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:30}#modal.open{display:flex}
-#mbox{background:var(--p);border:1px solid var(--b);border-radius:12px;width:640px;max-width:94vw;max-height:80vh;display:flex;flex-direction:column}
-#mbox .l{overflow:auto;padding:6px 10px;flex:1}.dir{padding:6px 8px;border-radius:6px;cursor:pointer}.dir:hover{background:var(--p2)}
-.tl{display:flex;align-items:flex-end;gap:3px;height:120px;border-bottom:1px solid var(--b);margin-bottom:10px}.tl div{flex:1;background:#2b4f81;min-width:4px;position:relative}.tl div i{position:absolute;bottom:0;left:0;right:0;background:var(--crit)}
+.verdict{padding:14px 18px;border-radius:var(--radius);margin-bottom:14px;font-size:15px;display:flex;gap:12px;align-items:center;border-left-width:5px;border-left-style:solid}
+.verdict.COMPROMISED{background:var(--crit-bg);border:1px solid rgba(244,63,94,0.3);border-left-color:var(--crit);color:#fecdd3}
+.verdict.SUSPICIOUS{background:var(--high-bg);border:1px solid rgba(251,146,60,0.3);border-left-color:var(--high);color:#fed7aa}
+.verdict.REVIEW{background:var(--med-bg);border:1px solid rgba(250,204,21,0.3);border-left-color:var(--med);color:#fef08a}
+.verdict.CLEAN{background:var(--ok-bg);border:1px solid rgba(74,222,128,0.3);border-left-color:var(--ok);color:#bbf7d0}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--b);margin-bottom:14px;flex-wrap:wrap;padding-bottom:2px}
+.tab{padding:8px 16px;cursor:pointer;color:var(--m);border-radius:8px;font-weight:500;font-size:13px;transition:all .15s}
+.tab:hover{color:var(--t);background:var(--p2)}
+.tab.on{color:#fff;background:var(--p2);border:1px solid var(--b2);font-weight:600}
+table{width:100%;border-collapse:separate;border-spacing:0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--b);vertical-align:middle}
+th{color:var(--m);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;position:sticky;top:0;background:var(--p);z-index:2}
+tr.f{cursor:pointer;transition:background .1s}
+tr.f:hover{background:var(--p2)}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12.5px}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em}
+.badge.critical{background:var(--crit-bg);color:var(--crit);border:1px solid rgba(244,63,94,0.4)}
+.badge.high{background:var(--high-bg);color:var(--high);border:1px solid rgba(251,146,60,0.4)}
+.badge.medium{background:var(--med-bg);color:var(--med);border:1px solid rgba(250,204,21,0.4)}
+.badge.low{background:var(--low-bg);color:var(--low);border:1px solid rgba(96,165,250,0.4)}
+.badge.info{background:var(--info-bg);color:var(--info);border:1px solid rgba(148,163,184,0.4)}
+.chip{display:inline-flex;align-items:center;background:var(--p2);border:1px solid var(--b);border-radius:99px;padding:1px 8px;font-size:11px;color:var(--m);margin:0 4px 4px 0}
+.scroll{max-height:64vh;overflow:auto;border-radius:8px;border:1px solid var(--b)}
+#drawer{position:fixed;top:0;right:-800px;width:780px;max-width:96vw;height:100%;background:var(--p);border-left:1px solid var(--b);box-shadow:-12px 0 40px rgba(0,0,0,0.6);transition:right .22s cubic-bezier(0.16,1,0.3,1);z-index:30;display:flex;flex-direction:column}
+#drawer.open{right:0}
+#dh{padding:14px 18px;border-bottom:1px solid var(--b);display:flex;gap:12px;align-items:center;background:var(--p2)}
+#db{padding:16px 18px;overflow:auto;flex:1}
+.src{background:#06080e;border:1px solid var(--b);border-radius:8px;overflow:auto;max-height:68vh}
+.ln{display:flex;white-space:pre;font-family:ui-monospace,Menlo,Monaco,monospace;font-size:12px;line-height:1.45}
+.ln i{color:#475569;min-width:48px;text-align:right;padding:0 12px;font-style:normal;user-select:none;border-right:1px solid #1e293b}
+.ln.hl{background:rgba(244,63,94,0.2)}
+.ln.flash{background:rgba(250,204,21,0.25)}
+.fnd{border:1px solid var(--b);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--p2)}
+.fnd p{margin:6px 0;color:var(--m);font-size:13px}
+pre.dec{background:#06080e;border:1px solid var(--b);border-radius:8px;padding:12px;overflow:auto;max-height:50vh;white-space:pre-wrap;word-break:break-all;font-size:12px;font-family:ui-monospace,Menlo,monospace}
+.chain{color:var(--a);font-weight:600;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:40}
+#modal.open{display:flex}
+#mbox{background:var(--p);border:1px solid var(--b);border-radius:12px;width:680px;max-width:94vw;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5)}
+#mbox .l{overflow:auto;padding:8px 12px;flex:1}
+.dir{padding:7px 10px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .1s}
+.dir:hover{background:var(--p2)}
+.tl{display:flex;align-items:flex-end;gap:3px;height:120px;border-bottom:1px solid var(--b);margin-bottom:12px;padding-top:10px}
+.tl div{flex:1;background:#1e3a5f;min-width:4px;position:relative;border-radius:2px 2px 0 0}
+.tl div i{position:absolute;bottom:0;left:0;right:0;background:var(--crit);border-radius:2px 2px 0 0}
 .muted{color:var(--m)}.hide{display:none}
 </style></head><body>
-<header><span class="logo">🛡️</span><div><h1>Laravel Sentinel</h1><small>Read-only malware scanner & decoder · everything stays on this computer</small></div></header>
+<header>
+  <div class="brand">
+    <span class="shield">🛡️</span>
+    <div>
+      <h1>Laravel Sentinel <span class="ver">v2.1</span></h1>
+      <small>Local malware scanner, multi-layer deobfuscator &amp; security triage</small>
+    </div>
+  </div>
+  <div class="row">
+    <span class="chip" style="margin:0;font-size:12px">Read-Only Safety</span>
+  </div>
+</header>
 <main>
 <div class="card">
   <div class="row"><input id="path" class="grow" type="text" placeholder="/Users/you/Desktop/your-laravel-project"><button id="browse">📁 Browse…</button>
