@@ -1,0 +1,17 @@
+# Laravel Sentinel Git Ignore
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# Scan output and quarantine directories
+*_QUARANTINE/
+sentinel-report.json
+sentinel-report.html
+report.json
+report.html
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
