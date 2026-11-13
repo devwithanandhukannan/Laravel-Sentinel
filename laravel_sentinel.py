@@ -1788,138 +1788,209 @@ class Handler(BaseHTTPRequestHandler):
 
 
 INDEX_HTML = r"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Laravel Sentinel — Malware Scanner &amp; Security Triage</title>
+<title>Laravel Sentinel — Cyber Threat Scanner &amp; Deobfuscator</title>
 <style>
 :root{
-  --bg:#000000;--p:#09090b;--p2:#121215;--p3:#1a1a1e;
-  --b:#222225;--b2:#38383e;--b-bright:#ffffff;
-  --t:#ffffff;--m:#88888e;--faint:#44444a;
-  --a:#ffffff;
-  --crit:#ffffff;--high:#e4e4e7;--med:#a1a1aa;--low:#71717a;--info:#52525b;--ok:#ffffff;
-  --radius:6px;
+  --bg:#07090e;--p:#0d121c;--p2:#131a27;--p3:#1a2334;
+  --b:#1e293b;--b2:#2d3c54;--b-bright:#00f0ff;
+  --t:#f1f5f9;--m:#8ea0bc;--faint:#475569;
+  --cyan:#00f0ff;--green:#00ff88;
+  --crit:#ff2a5f;--crit-bg:rgba(255,42,95,0.14);--crit-glow:rgba(255,42,95,0.45);
+  --high:#ff8800;--high-bg:rgba(255,136,0,0.14);
+  --med:#ffd000;--med-bg:rgba(255,208,0,0.14);
+  --low:#00d4ff;--low-bg:rgba(0,212,255,0.14);
+  --info:#a78bfa;--info-bg:rgba(167,139,250,0.14);
+  --ok:#00ff88;--ok-bg:rgba(0,255,136,0.14);
+  --radius:8px;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--t);font:13.5px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em}
-header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--b);background:var(--p)}
+body{margin:0;background:var(--bg);color:var(--t);font:13.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;-webkit-font-smoothing:antialiased}
+code,.mono{font-family:ui-monospace,"SF Mono","Fira Code",Menlo,Consolas,monospace}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--b);background:var(--p);box-shadow:0 4px 20px rgba(0,0,0,0.4)}
 .brand{display:flex;align-items:center;gap:12px}
-.logo-mark{width:26px;height:26px;background:#ffffff;color:#000000;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;border-radius:4px;letter-spacing:-0.03em}
-.brand h1{font-size:15px;font-weight:700;margin:0;letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
-.brand span.ver{font-size:10px;font-weight:600;padding:1px 6px;border:1px solid var(--b2);border-radius:10px;color:var(--m);letter-spacing:0}
-.brand small{color:var(--m);font-size:11.5px;letter-spacing:0}
+.logo-mark{width:32px;height:32px;background:#00f0ff;color:#000000;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;border-radius:6px;box-shadow:0 0 14px rgba(0,240,255,0.45)}
+.brand h1{font-size:15px;font-weight:800;margin:0;letter-spacing:0.04em;display:flex;align-items:center;gap:8px;color:#ffffff}
+.brand span.ver{font-size:10px;font-weight:700;padding:2px 7px;background:rgba(0,240,255,0.12);border:1px solid #00f0ff;border-radius:10px;color:#00f0ff;font-family:ui-monospace,monospace}
+.brand small{color:var(--m);font-size:11.5px}
+.chip-hacker-live{color:#00ff88;border:1px solid #00ff88;background:rgba(0,255,136,0.1);padding:3px 9px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.05em;font-family:ui-monospace,monospace}
+.chip-hacker{color:#00f0ff;border:1px solid #00f0ff;background:rgba(0,240,255,0.1);padding:3px 9px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.05em;font-family:ui-monospace,monospace;box-shadow:0 0 10px rgba(0,240,255,0.2)}
+.chip-shield{color:var(--m);border:1px solid var(--b2);background:var(--p2);padding:3px 9px;border-radius:4px;font-size:11px;font-family:ui-monospace,monospace}
+
 main{padding:20px 24px;max-width:1560px;margin:auto}
-.card{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.card{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:18px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input[type=text],input[type=date],select,textarea{background:var(--p2);border:1px solid var(--b);color:var(--t);border-radius:var(--radius);padding:8px 12px;font:inherit;font-size:13px;outline:none;transition:border-color .15s}
-input[type=text]:focus,input[type=date]:focus,select:focus{border-color:#ffffff}
+input[type=text],input[type=date],select,textarea{background:var(--p2);border:1px solid var(--b);color:var(--t);border-radius:var(--radius);padding:9px 12px;font:inherit;font-size:13px;outline:none;transition:border-color .15s}
+input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,240,255,0.25)}
 input.grow{flex:1;min-width:280px}
-button{background:var(--p2);color:var(--t);border:1px solid var(--b);border-radius:var(--radius);padding:8px 14px;cursor:pointer;font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;transition:all .15s;user-select:none}
-button:hover{border-color:var(--b2);background:var(--p3)}
-button.pri{background:#ffffff;border-color:#ffffff;color:#000000;font-weight:600}
-button.pri:hover{background:#e4e4e7;border-color:#e4e4e7}
-button.danger{background:transparent;border:1px solid #71717a;color:#ffffff}
-button.danger:hover{border-color:#ffffff;background:#18181b}
+button{background:var(--p2);color:var(--t);border:1px solid var(--b);border-radius:var(--radius);padding:8px 14px;cursor:pointer;font:inherit;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;transition:all .15s;user-select:none}
+button:hover{border-color:var(--cyan);background:var(--p3)}
+button.pri{background:#00f0ff;border-color:#00f0ff;color:#000000;font-weight:800;box-shadow:0 0 12px rgba(0,240,255,0.35)}
+button.pri:hover{background:#33f3ff;border-color:#33f3ff;box-shadow:0 0 18px rgba(0,240,255,0.6)}
+button.danger{background:rgba(255,42,95,0.12);border:1px solid #ff2a5f;color:#ff2a5f;font-weight:700}
+button.danger:hover:not(:disabled){background:#ff2a5f;color:#ffffff;box-shadow:0 0 14px rgba(255,42,95,0.5)}
 button:disabled{opacity:.35;cursor:not-allowed}
 label.opt{color:var(--m);display:flex;gap:8px;align-items:center;font-size:12.5px;cursor:pointer;user-select:none}
-.bar{height:3px;background:var(--p2);border-radius:2px;overflow:hidden;margin-top:12px}
-.bar>div{height:100%;background:#ffffff;width:0;transition:width .2s ease-out}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
-.stat{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:14px;cursor:pointer;transition:border-color .15s,background .15s}
-.stat:hover{border-color:var(--b2)}
-.stat b{font-size:26px;font-weight:700;display:block;letter-spacing:-0.03em;line-height:1.2;color:#ffffff}
-.stat span{color:var(--m);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-top:4px;display:block}
-.stat.on{border-color:#ffffff;background:var(--p2)}
-.crit,.high,.med,.low,.info{color:#ffffff}
-.verdict{padding:14px 18px;border-radius:var(--radius);margin-bottom:14px;font-size:14px;display:flex;gap:12px;align-items:center;background:var(--p);border:1px solid var(--b2)}
-.verdict.COMPROMISED{border-color:#ffffff}
-.verdict.COMPROMISED b{background:#ffffff;color:#000000;padding:2px 8px;border-radius:3px;font-size:11px;letter-spacing:0.06em;font-weight:700}
-.verdict.SUSPICIOUS b{border:1px solid #ffffff;color:#ffffff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:700}
-.verdict.REVIEW b{border:1px solid var(--m);color:var(--m);padding:2px 8px;border-radius:3px;font-size:11px;font-weight:700}
-.verdict.CLEAN b{border:1px solid var(--b2);color:#ffffff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:700}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--b);margin-bottom:14px;flex-wrap:wrap}
-.tab{padding:8px 14px;cursor:pointer;color:var(--m);border-bottom:2px solid transparent;font-size:13px;font-weight:500;transition:color .15s,border-color .15s}
+.bar{height:4px;background:var(--p2);border-radius:2px;overflow:hidden;margin-top:12px}
+.bar>div{height:100%;background:linear-gradient(90deg,#00f0ff,#00ff88);width:0;transition:width .2s ease-out;box-shadow:0 0 8px rgba(0,240,255,0.5)}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.stat{background:var(--p);border:1px solid var(--b);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.stat:hover{border-color:var(--b2);transform:translateY(-1px)}
+.stat.on{background:var(--p2);box-shadow:0 0 14px rgba(0,240,255,0.15);border-color:var(--cyan)}
+.stat.critical{border-left:4px solid var(--crit)}
+.stat.high{border-left:4px solid var(--high)}
+.stat.medium{border-left:4px solid var(--med)}
+.stat.low{border-left:4px solid var(--low)}
+.stat.info{border-left:4px solid var(--info)}
+
+.stat-num{font-size:30px;font-weight:800;line-height:1.1;letter-spacing:-0.02em;font-family:ui-monospace,monospace}
+.stat-num.critical{color:var(--crit);text-shadow:0 0 12px rgba(255,42,95,0.4)}
+.stat-num.high{color:var(--high)}
+.stat-num.medium{color:var(--med)}
+.stat-num.low{color:var(--low)}
+.stat-num.info{color:var(--info)}
+.stat-label{font-size:12px;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;margin-top:6px;color:var(--t)}
+.stat-sub{color:var(--m);font-size:11px;margin-top:3px}
+
+.verdict{padding:16px 20px;border-radius:var(--radius);margin-bottom:16px;display:flex;gap:16px;align-items:center;border:1px solid var(--b)}
+.verdict.COMPROMISED{background:rgba(255,42,95,0.12);border-color:#ff2a5f;box-shadow:0 0 20px rgba(255,42,95,0.2)}
+.verdict.COMPROMISED .v-badge{background:#ff2a5f;color:#ffffff;font-weight:800;padding:4px 10px;border-radius:4px;font-size:12px;letter-spacing:0.05em;font-family:ui-monospace,monospace;box-shadow:0 0 10px rgba(255,42,95,0.6)}
+.verdict.CLEAN{background:rgba(0,255,136,0.1);border-color:#00ff88;box-shadow:0 0 20px rgba(0,255,136,0.15)}
+.verdict.CLEAN .v-badge{background:#00ff88;color:#000000;font-weight:800;padding:4px 10px;border-radius:4px;font-size:12px;letter-spacing:0.05em;font-family:ui-monospace,monospace}
+.v-text{display:flex;flex-direction:column;gap:3px}
+.v-text b{font-size:14.5px;color:#ffffff}
+.v-text span{font-size:12.5px;color:var(--m)}
+
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--b);margin-bottom:16px;flex-wrap:wrap}
+.tab{padding:9px 16px;cursor:pointer;color:var(--m);border-bottom:2px solid transparent;font-size:13px;font-weight:600;transition:all .15s}
 .tab:hover{color:var(--t)}
-.tab.on{color:#ffffff;border-bottom-color:#ffffff;font-weight:600}
+.tab.on{color:#00f0ff;border-bottom-color:#00f0ff;text-shadow:0 0 10px rgba(0,240,255,0.3)}
+
 table{width:100%;border-collapse:collapse}
-th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--b);vertical-align:middle}
-th{color:var(--m);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;position:sticky;top:0;background:var(--p);z-index:2}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--b);vertical-align:middle}
+th{color:var(--m);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;position:sticky;top:0;background:var(--p);z-index:2}
 tr.f{cursor:pointer;transition:background .1s}
 tr.f:hover{background:var(--p2)}
-code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px}
-.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em}
-.badge.critical{background:#ffffff;color:#000000}
-.badge.high{border:1px solid #ffffff;color:#ffffff;background:transparent}
-.badge.medium{border:1px solid #71717a;color:#d4d4d8;background:transparent}
-.badge.low{border:1px solid #3f3f46;color:#a1a1aa;background:transparent}
-.badge.info{border:1px solid #27272a;color:#71717a;background:transparent}
-.chip{display:inline-flex;align-items:center;background:transparent;border:1px solid var(--b);border-radius:3px;padding:1px 6px;font-size:11px;color:var(--m);margin:0 4px 4px 0}
+
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:4px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;font-family:ui-monospace,monospace}
+.badge.critical{background:var(--crit);color:#ffffff;box-shadow:0 0 10px rgba(255,42,95,0.5)}
+.badge.high{background:var(--high-bg);border:1px solid var(--high);color:var(--high)}
+.badge.medium{background:var(--med-bg);border:1px solid var(--med);color:var(--med)}
+.badge.low{background:var(--low-bg);border:1px solid var(--low);color:var(--low)}
+.badge.info{background:var(--info-bg);border:1px solid var(--info);color:var(--info)}
+.badge.clean,.badge.ok{background:var(--ok-bg);border:1px solid var(--ok);color:var(--ok)}
+
+.chip{display:inline-flex;align-items:center;background:var(--p2);border:1px solid var(--b);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--m);margin:0 4px 4px 0}
 .scroll{max-height:64vh;overflow:auto;border-radius:var(--radius);border:1px solid var(--b)}
-#drawer{position:fixed;top:0;right:-820px;width:800px;max-width:96vw;height:100%;background:#09090b;border-left:1px solid var(--b);box-shadow:-20px 0 50px rgba(0,0,0,0.8);transition:right .22s cubic-bezier(0.16,1,0.3,1);z-index:30;display:flex;flex-direction:column}
+
+#drawer{position:fixed;top:0;right:-880px;width:860px;max-width:96vw;height:100%;background:var(--p);border-left:1px solid var(--b2);box-shadow:-20px 0 60px rgba(0,0,0,0.85);transition:right .22s cubic-bezier(0.16,1,0.3,1);z-index:30;display:flex;flex-direction:column}
 #drawer.open{right:0}
-#dh{padding:14px 18px;border-bottom:1px solid var(--b);display:flex;gap:12px;align-items:center;background:#0c0c0e}
-#db{padding:16px 18px;overflow:auto;flex:1}
-.src{background:#000000;border:1px solid var(--b);border-radius:var(--radius);overflow:auto;max-height:68vh}
-.ln{display:flex;white-space:pre;font-family:ui-monospace,Menlo,Monaco,monospace;font-size:12px;line-height:1.5}
-.ln i{color:#52525b;min-width:48px;text-align:right;padding:0 12px;font-style:normal;user-select:none;border-right:1px solid #18181b}
-.ln.hl{background:rgba(255,255,255,0.08);color:#ffffff}
-.ln.flash{background:rgba(255,255,255,0.18)}
-.fnd{border:1px solid var(--b);border-radius:var(--radius);padding:12px;margin-bottom:10px;background:var(--p2)}
-.fnd p{margin:6px 0;color:var(--m);font-size:12.5px}
-pre.dec{background:#000000;border:1px solid var(--b);border-radius:var(--radius);padding:12px;overflow:auto;max-height:50vh;white-space:pre-wrap;word-break:break-all;font-size:12px;font-family:ui-monospace,Menlo,monospace;color:#ffffff}
-.chain{color:#ffffff;font-weight:600;font-family:ui-monospace,Menlo,monospace;font-size:12px}
-#modal{position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:40}
+#dh{padding:14px 20px;border-bottom:1px solid var(--b);display:flex;gap:12px;align-items:center;background:#090d14}
+#db{padding:18px 20px;overflow:auto;flex:1}
+
+/* RED HIGHLIGHT FOR MALWARE LINES IN SOURCE */
+.src{background:#05070a;border:1px solid var(--b);border-radius:var(--radius);overflow:auto;max-height:68vh;position:relative}
+.ln{display:flex;align-items:center;white-space:pre;font-family:ui-monospace,SFMono-Regular,\"SF Mono\",Menlo,Consolas,monospace;font-size:12px;line-height:1.6;border-left:5px solid transparent}
+.ln i{color:var(--faint);min-width:48px;text-align:right;padding:0 12px;font-style:normal;user-select:none;border-right:1px solid #141b26}
+.code-text{padding-left:8px;flex:1}
+.ln.hl{background:rgba(255,42,95,0.28) !important;border-left:5px solid #ff2a5f !important;color:#ffb8c6 !important;font-weight:600 !important;box-shadow:inset 0 0 12px rgba(255,42,95,0.25)}
+.ln.hl i{color:#ffffff !important;background:#ff2a5f !important;font-weight:800 !important;border-right:1px solid #ff2a5f !important}
+.ln.flash{animation:pulse-red 1.2s ease-out}
+@keyframes pulse-red{0%{background:rgba(255,42,95,0.7)}100%{background:rgba(255,42,95,0.28)}}
+
+.threat-pill{background:#ff2a5f;color:#ffffff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;margin:0 12px;letter-spacing:0.05em;display:inline-flex;align-items:center;white-space:nowrap;box-shadow:0 0 10px rgba(255,42,95,0.6)}
+.src-banner{background:#111827;border:1px solid rgba(255,42,95,0.3);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.btn-jump-pill{background:rgba(255,42,95,0.15);color:#ff2a5f;border:1px solid #ff2a5f;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-jump-pill:hover{background:#ff2a5f;color:#ffffff;box-shadow:0 0 10px rgba(255,42,95,0.6)}
+.btn-jump{background:rgba(255,42,95,0.15);color:#ff2a5f;border:1px solid #ff2a5f;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-jump:hover{background:#ff2a5f;color:#ffffff;box-shadow:0 0 10px rgba(255,42,95,0.5)}
+
+.fnd{border:1px solid var(--b);border-radius:var(--radius);padding:14px;margin-bottom:12px;background:var(--p2)}
+.fnd.critical{border-color:rgba(255,42,95,0.4);border-left:4px solid var(--crit)}
+.fnd.high{border-color:rgba(255,136,0,0.4);border-left:4px solid var(--high)}
+.fnd.medium{border-color:rgba(255,208,0,0.4);border-left:4px solid var(--med)}
+pre.dec{background:#05070a;border:1px solid var(--b);border-radius:var(--radius);padding:12px;overflow:auto;max-height:50vh;white-space:pre-wrap;word-break:break-all;font-size:12px;font-family:ui-monospace,Menlo,monospace;color:#ffffff}
+.chain{color:#00f0ff;font-weight:700;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+
+#modal{position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:40}
 #modal.open{display:flex}
-#mbox{background:var(--p);border:1px solid var(--b2);border-radius:8px;width:680px;max-width:94vw;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.7)}
-#mbox .l{overflow:auto;padding:8px 12px;flex:1}
-.dir{padding:7px 10px;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .1s}
-.dir:hover{background:var(--p2)}
-.tl{display:flex;align-items:flex-end;gap:3px;height:110px;border-bottom:1px solid var(--b);margin-bottom:12px;padding-top:10px}
-.tl div{flex:1;background:#18181b;min-width:4px;position:relative}
-.tl div i{position:absolute;bottom:0;left:0;right:0;background:#ffffff}
+#mbox{background:var(--p);border:1px solid var(--b2);border-radius:10px;width:680px;max-width:94vw;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 25px 60px rgba(0,0,0,0.8)}
+#mbox .l{overflow:auto;padding:10px 14px;flex:1}
+.dir{padding:8px 12px;border-radius:5px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
+.dir:hover{background:var(--p2);color:#00f0ff}
+
 .muted{color:var(--m)}.hide{display:none}
 </style></head><body>
 <header>
   <div class="brand">
-    <div class="logo-mark">S</div>
+    <div class="logo-mark">⚡</div>
     <div>
-      <h1>Laravel Sentinel <span class="ver">v2.1</span></h1>
-      <small>Local Malware Scanner &amp; Deep Deobfuscation</small>
+      <h1>LARAVEL SENTINEL <span class="ver">v2.1</span></h1>
+      <small>Automated Malware Scanner &amp; Threat Deobfuscator</small>
     </div>
   </div>
-  <div class="row" style="align-items:center;gap:10px">
-    <span class="chip" style="margin:0;letter-spacing:0.04em;text-transform:uppercase;color:var(--t);border-color:var(--b2)">Powered by Kneazle</span>
-    <span class="chip" style="margin:0;letter-spacing:0.04em">READ-ONLY ENGINE</span>
+  <div class="row" style="align-items:center;gap:12px">
+    <span class="chip-hacker-live">● SYSTEM ARMED</span>
+    <span class="chip-hacker">POWERED BY KNEAZLE</span>
+    <span class="chip-shield">READ-ONLY SAFETY SHIELD</span>
   </div>
 </header>
 <main>
 <div class="card">
-  <div class="row"><input id="path" class="grow" type="text" placeholder="/path/to/laravel-project"><button id="browse">Browse…</button>
-  <button id="scan" class="pri">Scan project</button><button id="cancel" class="hide">Stop</button></div>
-  <div class="row" style="margin-top:10px">
-    <label class="opt"><input type="checkbox" id="deep"> Deep scan vendor &amp; node_modules assets</label>
-    <input id="baseline" type="text" class="grow" style="max-width:360px" placeholder="Optional: clean vendor copy for hash comparison">
-    <input id="custom" type="text" class="grow" style="max-width:300px" placeholder="Extra indicators (comma separated)">
+  <div class="row">
+    <input id="path" class="grow" type="text" placeholder="/path/to/laravel-project">
+    <button id="browse">📂 Choose Folder…</button>
+    <button id="scan" class="pri">⚡ SCAN SYSTEM</button>
+    <button id="cancel" class="hide">■ Stop</button>
   </div>
-  <div id="prog" class="hide"><div class="bar"><div id="pbar"></div></div><div class="muted mono" id="ptxt" style="margin-top:6px"></div></div>
-  <div id="err" class="crit hide" style="margin-top:8px"></div>
+  <div class="row" style="margin-top:12px">
+    <label class="opt"><input type="checkbox" id="deep"> Deep scan JS/assets inside vendor &amp; node_modules (thorough)</label>
+    <input id="baseline" type="text" class="grow" style="max-width:360px" placeholder="Optional: folder with a CLEAN vendor/ to compare">
+    <input id="custom" type="text" class="grow" style="max-width:300px" placeholder="Extra malware signatures (comma separated)">
+  </div>
+  <div id="prog" class="hide"><div class="bar"><div id="pbar"></div></div><div class="muted mono" id="ptxt" style="margin-top:8px"></div></div>
+  <div id="err" class="crit hide" style="margin-top:10px;padding:10px;border-radius:6px;background:rgba(255,42,95,0.15);border:1px solid #ff2a5f;color:#ff2a5f"></div>
 </div>
 <div id="out" class="hide">
   <div id="verdict" class="verdict"></div>
   <div class="cards" id="cards"></div>
-  <div style="height:14px"></div>
-  <div class="tabs" id="tabs"><div class="tab on" data-t="files">Files</div><div class="tab" data-t="find">All findings (line view)</div><div class="tab" data-t="timeline">Timeline</div><div class="tab" data-t="iocs">Indicators</div><div class="tab" data-t="secrets">Secrets to rotate</div><div class="tab" data-t="fix">Remediation</div><div class="tab" data-t="upg">Upgrade</div><div class="tab" data-t="quar">Quarantine</div></div>
-  <div id="p-files" class="card">
-    <div class="row" style="margin-bottom:10px"><input id="q" type="text" class="grow" placeholder="Filter by path or finding…"><select id="cat"><option value="">All categories</option></select><input id="since" type="date" title="Only files modified on/after"><button id="selhigh">Select Critical + High</button><button id="qbtn" class="danger" disabled>Quarantine selected (0)</button><button id="xj">Export JSON</button><button id="xh">Export HTML</button></div>
-    <div class="scroll"><table><thead><tr><th></th><th>Severity</th><th>File</th><th>Why flagged</th><th>Size</th><th>Modified</th></tr></thead><tbody id="rows"></tbody></table></div><div id="more" class="muted" style="margin-top:8px"></div>
+  <div style="height:18px"></div>
+  <div class="tabs" id="tabs">
+    <div class="tab on" data-t="files">🚨 Infected Files</div>
+    <div class="tab" data-t="find">⚡ All Threats</div>
+    <div class="tab" data-t="secrets">🔑 Leaked Secrets</div>
+    <div class="tab" data-t="fix">🛡️ How to Fix &amp; Clean</div>
+    <div class="tab" data-t="quar">📦 Quarantine Vault</div>
   </div>
-  <div id="p-find" class="card hide"></div><div id="p-upg" class="card hide"></div><div id="p-timeline" class="card hide"></div><div id="p-iocs" class="card hide"></div><div id="p-secrets" class="card hide"></div><div id="p-fix" class="card hide"></div><div id="p-quar" class="card hide"></div>
+  <div id="p-files" class="card">
+    <div class="row" style="margin-bottom:12px">
+      <input id="q" type="text" class="grow" placeholder="🔍 Type to filter files (e.g. index.php, backdoor, upload)...">
+      <select id="cat"><option value="">All Categories</option></select>
+      <input id="since" type="date" title="Only files modified on/after">
+      <button id="selhigh">🎯 Select Dangerous Files</button>
+      <button id="qbtn" class="danger" disabled>🔒 Move to Quarantine (0)</button>
+      <button id="xj">📥 Export JSON</button>
+      <button id="xh">📄 Download HTML Report</button>
+    </div>
+    <div class="scroll"><table><thead><tr><th style="width:32px"></th><th style="width:100px">Severity</th><th>File Location</th><th>Why It Was Flagged</th><th style="width:90px">Size</th><th style="width:150px">Modified</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div id="more" class="muted" style="margin-top:10px"></div>
+  </div>
+  <div id="p-find" class="card hide"></div>
+  <div id="p-secrets" class="card hide"></div>
+  <div id="p-fix" class="card hide"></div>
+  <div id="p-quar" class="card hide"></div>
+  <div id="p-upg" class="card hide"></div>
+  <div id="p-timeline" class="card hide"></div>
+  <div id="p-iocs" class="card hide"></div>
 </div>
 <footer style="margin-top:48px;padding:20px 0;border-top:1px solid var(--b);display:flex;justify-content:space-between;align-items:center;color:var(--m);font-size:12px;letter-spacing:0.02em">
-  <div>Laravel Sentinel v2.1 &bull; Defensive Malware Triage</div>
-  <div>Powered by <strong style="color:var(--t);letter-spacing:0.04em">Kneazle</strong></div>
+  <div>⚡ Laravel Sentinel v2.1 &bull; Automated Malware &amp; Threat Deobfuscator</div>
+  <div>Powered by <strong style="color:#00f0ff;letter-spacing:0.04em">Kneazle</strong></div>
 </footer>
 </main>
-<div id="drawer"><div id="dh"><button id="dclose">✕</button><div style="min-width:0"><div id="dtitle" class="mono" style="word-break:break-all"></div></div></div><div id="db"></div></div>
-<div id="modal"><div id="mbox"><div style="padding:12px 14px;border-bottom:1px solid var(--b)" class="row"><b>Choose project folder</b><span id="mpath" class="mono muted" style="flex:1;word-break:break-all"></span></div><div class="l" id="mlist"></div><div class="row" style="padding:12px 14px;border-top:1px solid var(--b);justify-content:flex-end"><button id="mcancel">Cancel</button><button id="muse" class="pri">Use this folder</button></div></div></div>
+<div id="drawer"><div id="dh"><button id="dclose">✕ Close</button><div style="min-width:0;flex:1"><div id="dtitle" class="mono" style="word-break:break-all;color:#00f0ff;font-weight:700"></div></div></div><div id="db"></div></div>
+<div id="modal"><div id="mbox"><div style="padding:14px 18px;border-bottom:1px solid var(--b)" class="row"><b>Choose project folder</b><span id="mpath" class="mono muted" style="flex:1;word-break:break-all"></span></div><div class="l" id="mlist"></div><div class="row" style="padding:14px 18px;border-top:1px solid var(--b);justify-content:flex-end"><button id="mcancel">Cancel</button><button id="muse" class="pri">Use this folder</button></div></div></div>
+
 <script>
 const qT=new URLSearchParams(location.search).get('t');if(qT)sessionStorage.sentinelToken=qT;const T=qT||sessionStorage.sentinelToken||'';const $=s=>document.querySelector(s);
 const SEVS=['critical','high','medium','low','info'];let R=null,F={sev:new Set(),q:'',cat:'',since:''},SEL=new Set(),SHOW=400;
@@ -1927,7 +1998,7 @@ async function api(p,o){o=o||{};const r=await fetch(p,{method:o.method||'GET',he
 function h(tag,a,...k){const e=document.createElement(tag);for(const[x,v]of Object.entries(a||{})){if(x==='class')e.className=v;else if(x==='text')e.textContent=v;else if(x.startsWith('on'))e.addEventListener(x.slice(2),v);else e.setAttribute(x,v)}for(const c of k.flat()){if(c==null)continue;e.append(c.nodeType?c:document.createTextNode(c))}return e}
 const fmt=n=>n>1073741824?(n/1073741824).toFixed(2)+' GB':n>1048576?(n/1048576).toFixed(1)+' MB':n>1024?(n/1024).toFixed(1)+' KB':n+' B';
 const dt=s=>s?new Date(s*1000).toLocaleString():'';
-const badge=s=>h('span',{class:'badge '+s,text:s});
+const badge=s=>h('span',{class:'badge '+s,text:s.toUpperCase()});
 async function init(){const d=await api('/api/browse?path='+encodeURIComponent(localStorage.sentinelPath||'~'));$('#path').value=localStorage.sentinelPath||'';}
 $('#scan').onclick=async()=>{const path=$('#path').value.trim();if(!path)return fail('Enter or browse to your project folder.');localStorage.sentinelPath=path;$('#err').classList.add('hide');
  try{await api('/api/scan',{method:'POST',body:{path,deep:$('#deep').checked,baseline:$('#baseline').value.trim(),custom:$('#custom').value,since:''}})}catch(e){return fail(e.message)}
@@ -1939,61 +2010,202 @@ async function poll(){const p=await api('/api/progress');const pct=p.total?Math.
  if(p.status==='error'||p.status==='cancelled'){$('#scan').disabled=false;$('#cancel').classList.add('hide');$('#prog').classList.add('hide');return fail(p.status==='error'?p.error:'Scan stopped.')}
  setTimeout(poll,500)}
 async function load(){R=await api('/api/results');SEL.clear();F={sev:new Set(),q:'',cat:'',since:''};$('#out').classList.remove('hide');
- const v=$('#verdict');v.className='verdict '+R.verdict.label;v.replaceChildren(h('b',{text:R.verdict.label}),h('span',{text:R.verdict.text+'  ·  '+R.scanned+' files + '+R.images.scanned+' images scanned in '+R.seconds+'s  ·  '+R.files.length+' flagged  ·  '+R.keys.length+' key/secret hits'}));
- const c=$('#cards');c.replaceChildren(...SEVS.map(s=>h('div',{class:'stat',onclick:ev=>{F.sev.has(s)?F.sev.delete(s):F.sev.add(s);cardsOn();render()},'data-s':s},h('b',{class:{critical:'crit',high:'high',medium:'med',low:'low',info:'info'}[s],text:R.counts[s]}),h('span',{text:s+' files · '+R.finding_counts[s]+' findings'}))));
- const cs=$('#cat');cs.replaceChildren(h('option',{value:'',text:'All categories'}),...Object.entries(R.categories).sort((a,b)=>b[1]-a[1]).map(([k,n])=>h('option',{value:k,text:k+' ('+n+')'})));
- render();renderTimeline();renderIocs();renderSecrets();renderFix();renderQuar();renderUpg();FIND=null}
+ const isBad = R.verdict.label==='COMPROMISED'||R.verdict.label==='SUSPICIOUS';
+ const v=$('#verdict');v.className='verdict '+R.verdict.label;
+ v.replaceChildren(
+   h('div',{class:'v-badge',text:isBad?'🚨 MALWARE DETECTED':'🛡️ SYSTEM SECURE'}),
+   h('div',{class:'v-text'},
+     h('b',{text:isBad?'Critical security threats were found in this project!':'No malware or security threats detected.'}),
+     h('span',{text:R.files.length+' dangerous file(s) flagged · '+R.scanned+' files scanned in '+R.seconds+'s · '+R.keys.length+' leaked secrets/keys found.'})
+   )
+ );
+ const SEV_INFO = {
+   critical:{title:'Critical Malware',sub:'Backdoors, webshells & trojans'},
+   high:{title:'High Risk Code',sub:'Dangerous functions & droppers'},
+   medium:{title:'Suspicious Files',sub:'Anomalies & obfuscation'},
+   low:{title:'Low Risk',sub:'Minor security warnings'},
+   info:{title:'Audit Info',sub:'Laravel configuration notices'}
+ };
+ const c=$('#cards');c.replaceChildren(...SEVS.map(s=>{
+   const info=SEV_INFO[s]||{title:s,sub:'findings'};
+   return h('div',{class:'stat '+s,onclick:ev=>{F.sev.has(s)?F.sev.delete(s):F.sev.add(s);cardsOn();render()},'data-s':s},
+     h('div',{class:'stat-num '+s,text:R.counts[s]||0}),
+     h('div',{class:'stat-label',text:info.title}),
+     h('div',{class:'stat-sub',text:info.sub})
+   );
+ }));
+ const cs=$('#cat');cs.replaceChildren(h('option',{value:'',text:'All Categories'}),...Object.entries(R.categories).sort((a,b)=>b[1]-a[1]).map(([k,n])=>h('option',{value:k,text:k+' ('+n+')'})));
+ render();renderSecrets();renderFix();renderQuar();FIND=null}
 function cardsOn(){document.querySelectorAll('.stat').forEach(e=>e.classList.toggle('on',F.sev.has(e.dataset.s)))}
 function rows(){return R.files.filter(f=>(!F.sev.size||F.sev.has(f.sev))&&(!F.cat||f.cats.includes(F.cat))&&(!F.since||f.mtime*1000>=new Date(F.since).getTime())&&(!F.q||(f.path+' '+f.top.join(' ')).toLowerCase().includes(F.q)))}
 function render(){const rs=rows();const tb=$('#rows');tb.replaceChildren(...rs.slice(0,SHOW).map(f=>{const cb=h('input',{type:'checkbox'});cb.checked=SEL.has(f.path);cb.onclick=e=>{e.stopPropagation();cb.checked?SEL.add(f.path):SEL.delete(f.path);upd()};
- return h('tr',{class:'f',onclick:()=>openFile(f.id)},h('td',{},cb),h('td',{},badge(f.sev)),h('td',{},h('code',{text:f.path}),h('div',{},f.cats.map(x=>h('span',{class:'chip',text:x})))),h('td',{},f.top.map(t=>h('div',{text:t})),f.decoded?h('span',{class:'chip',text:'🔓 '+f.decoded+' decoded payload(s)'}):null),h('td',{text:fmt(f.size)}),h('td',{text:dt(f.mtime)}))}));
- $('#more').textContent=rs.length>SHOW?('Showing first '+SHOW+' of '+rs.length+' - narrow the filters to see more.'):rs.length+' file(s)';upd()}
-function upd(){const b=$('#qbtn');b.textContent='Quarantine selected ('+SEL.size+')';b.disabled=!SEL.size}
+ return h('tr',{class:'f',onclick:()=>openFile(f.id)},
+   h('td',{},cb),
+   h('td',{},badge(f.sev)),
+   h('td',{},h('code',{style:'color:#00f0ff;font-weight:600',text:f.path}),h('div',{},f.cats.map(x=>h('span',{class:'chip',text:x})))),
+   h('td',{},f.top.map(t=>h('div',{style:'margin:2px 0',text:t})),f.decoded?h('span',{class:'chip',style:'color:#00ff88;border-color:#00ff88',text:'🔓 '+f.decoded+' decoded payload(s)'}):null),
+   h('td',{text:fmt(f.size)}),
+   h('td',{text:dt(f.mtime)})
+ );
+}));
+ $('#more').textContent=rs.length>SHOW?('Showing first '+SHOW+' of '+rs.length+' - narrow your search to see more.'):rs.length+' file(s) found';upd()}
+function upd(){const b=$('#qbtn');b.textContent='🔒 Move to Quarantine ('+SEL.size+')';b.disabled=!SEL.size}
 $('#q').oninput=e=>{F.q=e.target.value.toLowerCase();render()};$('#cat').onchange=e=>{F.cat=e.target.value;render()};$('#since').onchange=e=>{F.since=e.target.value;render()};
 $('#selhigh').onclick=()=>{R.files.filter(f=>f.sev==='critical'||f.sev==='high').forEach(f=>SEL.add(f.path));render()};
-$('#qbtn').onclick=async()=>{if(!confirm('Move '+SEL.size+' file(s) to a quarantine folder next to your project?\n\nNothing is deleted - you can restore from the Quarantine tab.'))return;
- const r=await api('/api/quarantine',{method:'POST',body:{files:[...SEL]}});alert('Moved '+r.moved+' file(s) to:\n'+r.folder+(r.errors.length?'\n\nErrors:\n'+r.errors.join('\n'):''));SEL.clear();renderQuar();tab('quar')};
+$('#qbtn').onclick=async()=>{if(!confirm('Move '+SEL.size+' dangerous file(s) into safe quarantine?\n\nFiles are isolated safely beside your project with read-only permissions. You can restore them anytime.'))return;
+ const r=await api('/api/quarantine',{method:'POST',body:{files:[...SEL]}});alert('Successfully quarantined '+r.moved+' file(s) into:\n'+r.folder+(r.errors.length?'\n\nErrors:\n'+r.errors.join('\n'):''));SEL.clear();renderQuar();tab('quar')};
 $('#xj').onclick=()=>location.href='/api/export.json?t='+T;$('#xh').onclick=()=>location.href='/api/export.html?t='+T;
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>tab(t.dataset.t));
-function tab(n){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.t===n));['files','find','timeline','iocs','secrets','fix','upg','quar'].forEach(x=>$('#p-'+x).classList.toggle('hide',x!==n));if(n==='quar')renderQuar();if(n==='find')renderFind()}
-async function openFile(id,jump){const d=await api('/api/file?id='+id);$('#dtitle').textContent=d.path;const body=$('#db');body.replaceChildren();
- const tabs=h('div',{class:'tabs'});const panes={};const mk=(k,l,el)=>{const t=h('div',{class:'tab',text:l,onclick:()=>{Object.keys(panes).forEach(x=>{panes[x].classList.toggle('hide',x!==k);tabsEl[x].classList.toggle('on',x===k)})}});tabsEl[k]=t;panes[k]=el;tabs.append(t);return el};const tabsEl={};
- const fp=h('div',{});d.findings.forEach(f=>fp.append(h('div',{class:'fnd'},badge(f.sev),' ',h('b',{text:' '+f.title}),h('span',{class:'chip',text:f.cat}),f.layer?h('span',{class:'chip',text:'in decoded layer'}):null,f.desc?h('p',{text:f.desc}):null,f.snippet?h('code',{text:(f.line?'line '+f.line+': ':'')+f.snippet}):null)));
- const hl=new Set(d.findings.filter(f=>f.line&&!f.layer).map(f=>f.line));const src=h('div',{class:'src'});d.source.split('\n').slice(0,3000).forEach((l,i)=>src.append(h('div',{class:'ln'+(hl.has(i+1)?' hl':''),'data-l':i+1},h('i',{text:i+1}),l.slice(0,600))));
- const sp=h('div',{},d.truncated?h('p',{class:'muted',text:'Showing the first 300 KB.'}):null,src);
- const dp=h('div',{});if(!d.payloads.length)dp.append(h('p',{class:'muted',text:'No encoded payloads were found in this file.'}));
- d.payloads.forEach((p,i)=>dp.append(h('div',{class:'fnd'},h('div',{},h('span',{class:'chain',text:p.chain.join(' → ')})),h('div',{},h('span',{class:'chip',text:p.status}),h('span',{class:'chip',text:p.size+' bytes'}),h('span',{class:'chip',text:'entropy '+p.entropy})),h('pre',{class:'dec',text:p.text}),h('button',{onclick:()=>navigator.clipboard.writeText(p.text)},'Copy'))));
- const ip=h('div',{},h('table',{},...[['Path',d.path],['Size',fmt(d.size)],['Modified',dt(d.mtime)],['Permissions',d.mode],['SHA-256',d.sha256||'-'],['MD5',d.md5||'-'],['Categories',d.cats.join(', ')]].map(([a,b])=>h('tr',{},h('td',{class:'muted',text:a}),h('td',{class:'mono',text:b})))),h('p',{},h('button',{onclick:()=>navigator.clipboard.writeText(d.sha256||'')},'Copy SHA-256 (for VirusTotal)')));
- mk('f','Findings ('+d.findings.length+')',fp);mk('s','Source',sp);mk('d','Decoded ('+d.payloads.length+')',dp);mk('i','Info',ip);body.append(tabs,...Object.values(panes));
- Object.keys(panes).forEach((x,i)=>{panes[x].classList.toggle('hide',i!==0);tabsEl[x].classList.toggle('on',i===0)});$('#drawer').classList.add('open');if(jump){tabsEl.s.click();setTimeout(()=>{const e=document.querySelector('.ln[data-l="'+jump+'"]');if(e)e.scrollIntoView({block:'center'})},60)}}
+function tab(n){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.t===n));['files','find','secrets','fix','quar'].forEach(x=>{const el=$('#p-'+x);if(el)el.classList.toggle('hide',x!==n)});if(n==='quar')renderQuar();if(n==='find')renderFind()}
+
+async function openFile(id,jump){
+ const d=await api('/api/file?id='+id);
+ $('#dtitle').textContent=d.path;
+ const body=$('#db');body.replaceChildren();
+ const tabs=h('div',{class:'tabs'});const panes={};const tabsEl={};
+ const mk=(k,l,el)=>{const t=h('div',{class:'tab',text:l,onclick:()=>{Object.keys(panes).forEach(x=>{panes[x].classList.toggle('hide',x!==k);tabsEl[x].classList.toggle('on',x===k)});if(k==='s'&&hlList.length)setTimeout(()=>jumpToLine(jump||hlList[0]),60)}});tabsEl[k]=t;panes[k]=el;tabs.append(t);return el};
+
+ const hl=new Set(d.findings.filter(f=>f.line&&!f.layer).map(f=>f.line));
+ const hlList=[...hl].sort((a,b)=>a-b);
+
+ const fp=h('div',{});
+ if(!d.findings.length)fp.append(h('p',{class:'muted',text:'No active threats found in this file.'}));
+ d.findings.forEach(f=>{
+   fp.append(h('div',{class:'fnd '+f.sev},
+     h('div',{style:'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'},
+       badge(f.sev),
+       f.line?h('button',{class:'btn-jump',onclick:()=>{tabsEl.s.click();setTimeout(()=>jumpToLine(f.line),80)}},'🔴 View Line '+f.line+' in Red Code'):null
+     ),
+     h('b',{style:'font-size:14px;color:var(--t)',text:f.title}),
+     h('div',{style:'margin:6px 0'},
+       h('span',{class:'chip',text:f.cat}),
+       f.layer?h('span',{class:'chip',style:'color:#00ff88;border-color:#00ff88',text:'In Decoded Payload Layer'}):null,
+       f.line?h('span',{class:'chip',style:'color:#ff2a5f;border-color:#ff2a5f;font-weight:700',text:'Line '+f.line}):null
+     ),
+     f.desc?h('p',{style:'color:var(--m);margin:8px 0;line-height:1.5',text:f.desc}):null,
+     f.snippet?h('pre',{class:'dec',style:'padding:8px 10px;margin-top:6px;color:#ff9ebb;background:#101520',text:(f.line?'line '+f.line+': ':'')+f.snippet}):null
+   ));
+ });
+
+ const src=h('div',{class:'src'});
+ d.source.split('\n').slice(0,3000).forEach((l,i)=>{
+   const isHl=hl.has(i+1);
+   const lineEl=h('div',{class:'ln'+(isHl?' hl':''),'data-l':i+1},
+     h('i',{text:i+1}),
+     h('span',{class:'code-text',text:l.slice(0,600)}),
+     isHl?h('span',{class:'threat-pill',text:'🚨 THREAT ON LINE '+(i+1)}):null
+   );
+   src.append(lineEl);
+ });
+
+ function jumpToLine(l){
+   const el=src.querySelector('.ln[data-l="'+l+'"]');
+   if(el){
+     el.scrollIntoView({block:'center',behavior:'smooth'});
+     el.classList.add('flash');
+     setTimeout(()=>el.classList.remove('flash'),1200);
+   }
+ }
+
+ const banner=h('div',{class:'src-banner'},
+   h('div',{style:'display:flex;align-items:center;gap:10px;flex-wrap:wrap'},
+     h('span',{style:'font-weight:800;color:'+(hlList.length?'#ff2a5f':'#00ff88')+';display:flex;align-items:center;gap:6px'},
+       hlList.length?'🚨 '+hlList.length+' THREAT LINE(S) FOUND:':'✓ NO MALWARE LINES DETECTED'
+     ),
+     ...hlList.map(l=>h('button',{class:'btn-jump-pill',onclick:()=>jumpToLine(l)},'🔴 Jump to Line '+l))
+   )
+ );
+
+ const sp=h('div',{},banner,d.truncated?h('p',{class:'muted',style:'padding:4px 0',text:'Showing the first 300 KB.'}):null,src);
+
+ const dp=h('div',{});
+ if(!d.payloads.length)dp.append(h('p',{class:'muted',text:'No encoded or hidden payloads were found in this file.'}));
+ d.payloads.forEach((p,i)=>dp.append(h('div',{class:'fnd'},
+   h('div',{},h('span',{class:'chain',text:p.chain.join(' → ')})),
+   h('div',{style:'margin:6px 0'},h('span',{class:'chip',text:p.status}),h('span',{class:'chip',text:p.size+' bytes'}),h('span',{class:'chip',text:'entropy '+p.entropy})),
+   h('pre',{class:'dec',text:p.text}),
+   h('button',{onclick:()=>navigator.clipboard.writeText(p.text)},'📋 Copy Payload')
+ )));
+
+ const ip=h('div',{},
+   h('table',{},...[['File Path',d.path],['File Size',fmt(d.size)],['Last Modified',dt(d.mtime)],['File Permissions',d.mode],['SHA-256 Hash',d.sha256||'-'],['MD5 Hash',d.md5||'-'],['Threat Categories',d.cats.join(', ')]].map(([a,b])=>h('tr',{},h('td',{class:'muted',text:a}),h('td',{class:'mono',text:b})))),
+   h('p',{style:'margin-top:14px'},h('button',{onclick:()=>navigator.clipboard.writeText(d.sha256||'')},'📋 Copy SHA-256 (for VirusTotal)'))
+ );
+
+ mk('f','🚨 Threats ('+d.findings.length+')',fp);
+ mk('s','💻 Source Code',sp);
+ mk('d','🔓 Decoded Malware ('+d.payloads.length+')',dp);
+ mk('i','ℹ️ File Info',ip);
+ body.append(tabs,...Object.values(panes));
+
+ Object.keys(panes).forEach((x,i)=>{panes[x].classList.toggle('hide',i!==0);tabsEl[x].classList.toggle('on',i===0)});
+ $('#drawer').classList.add('open');
+ if(jump){
+   tabsEl.s.click();
+   setTimeout(()=>jumpToLine(jump),100);
+ } else if(hlList.length){
+   // Auto scroll preview when user opens source
+   setTimeout(()=>{if(!panes.s.classList.contains('hide'))jumpToLine(hlList[0]);},120);
+ }
+}
 $('#dclose').onclick=()=>$('#drawer').classList.remove('open');
-function renderTimeline(){const p=$('#p-timeline');const mx=Math.max(1,...R.days.map(d=>d.files));
- p.replaceChildren(h('h3',{text:'File changes per day (red = flagged files)'}),h('div',{class:'tl'},R.days.map(d=>h('div',{title:d.day+': '+d.files+' files, '+d.flagged+' flagged',style:'height:'+Math.max(3,d.files/mx*100)+'%'},h('i',{style:'height:'+(d.files?d.flagged/d.files*100:0)+'%'})))),
- h('p',{class:'muted',text:'Attackers can fake modification times, so treat this as a hint, not proof. Bursts of many files created within seconds usually mean an automated installer:'}),
- R.clusters.length?h('table',{},h('tr',{},h('th',{text:'When'}),h('th',{text:'Files in burst'}),h('th',{text:'Flagged'}),h('th',{text:'Examples'})),R.clusters.map(c=>h('tr',{},h('td',{text:dt(c.start)}),h('td',{text:c.files}),h('td',{text:c.flagged}),h('td',{class:'mono',text:c.examples.join(', ')})))):h('p',{text:'No suspicious bursts detected.'}))}
-function renderIocs(){const p=$('#p-iocs');const list=R.iocs.map(i=>i.value).join('\n');p.replaceChildren(h('h3',{text:'Indicators recovered from files and decoded payloads'}),h('p',{class:'muted',text:'Give these to your host, block them in your firewall, and search your logs for them.'}),h('button',{onclick:()=>navigator.clipboard.writeText(list)},'Copy all'),R.iocs.length?h('table',{},h('tr',{},h('th',{text:'Type'}),h('th',{text:'Value'}),h('th',{text:'Hits'}),h('th',{text:'Seen in'})),R.iocs.map(i=>h('tr',{},h('td',{text:i.type}),h('td',{class:'mono',text:i.value}),h('td',{text:i.count}),h('td',{class:'mono',text:i.files.slice(0,3).join(', ')})))):h('p',{text:'No external URLs/IPs found.'}))}
-function renderSecrets(){const p=$('#p-secrets');p.replaceChildren(h('h3',{text:'Keys & credentials found - rotate these if the site was ever exposed'}),h('p',{class:'muted',text:'Values are masked and never leave your machine. Click a row to open the file at that line.'}),(R.secrets.length||R.keys.length)?h('table',{},h('tr',{},h('th',{text:'Type / key'}),h('th',{text:'File:line'}),h('th',{text:'Value (masked)'}),h('th',{text:'Rotated?'})),R.secrets.map(s=>h('tr',{class:'f',onclick:()=>openByPath(s.file,s.line)},h('td',{class:'mono',text:s.key}),h('td',{class:'mono',text:s.file+':'+s.line}),h('td',{class:'mono',text:s.masked}),h('td',{},h('input',{type:'checkbox',onclick:e=>e.stopPropagation()})))),R.keys.map(s=>h('tr',{class:'f',onclick:()=>openByPath(s.file,s.line)},h('td',{text:s.type}),h('td',{class:'mono',text:s.file+':'+s.line}),h('td',{class:'mono',text:s.masked}),h('td',{},h('input',{type:'checkbox',onclick:e=>e.stopPropagation()}))))):h('p',{text:'No keys or credentials found.'}))}
-function renderFix(){$('#p-fix').replaceChildren(h('h3',{text:'Recommended next steps'}),h('ol',{},R.remediation.map(x=>h('li',{style:'margin-bottom:10px'},h('b',{text:x.title}),h('div',{class:'muted',text:x.detail})))))}
-async function renderQuar(){const q=await api('/api/quarantines');$('#p-quar').replaceChildren(h('h3',{text:'Quarantine'}),h('p',{class:'muted',text:'Files are moved (not deleted) to a folder beside your project, read-only, with their original paths.'}),q.length?q.map(x=>h('div',{class:'fnd'},h('b',{text:x.id}),' · '+x.files.length+' file(s) ',h('div',{class:'mono muted',text:x.folder}),h('button',{onclick:async()=>{const r=await api('/api/restore',{method:'POST',body:{id:x.id}});alert('Restored '+r.restored+' file(s).'+(r.errors.length?'\n'+r.errors.join('\n'):''));renderQuar()}},'Restore all'))):h('p',{text:'Nothing quarantined yet.'}))}
+
+function renderSecrets(){const p=$('#p-secrets');
+ p.replaceChildren(
+   h('h3',{style:'color:#00f0ff',text:'🔑 Exposed Passwords, API Keys & Database Secrets'}),
+   h('p',{class:'muted',text:'Rotate these secrets immediately if your project was exposed to the web or untrusted servers. Click any row to jump directly to the code line.'}),
+   (R.secrets.length||R.keys.length)?h('table',{},
+     h('tr',{},h('th',{text:'Secret Type'}),h('th',{text:'File & Line'}),h('th',{text:'Masked Value'}),h('th',{text:'Action'})),
+     ...R.secrets.map(s=>h('tr',{class:'f',onclick:()=>openByPath(s.file,s.line)},h('td',{class:'mono',style:'color:#ffd000',text:s.key}),h('td',{class:'mono',text:s.file+':'+s.line}),h('td',{class:'mono',text:s.masked}),h('td',{},h('span',{class:'chip',text:'Exposed Secret'})))),
+     ...R.keys.map(s=>h('tr',{class:'f',onclick:()=>openByPath(s.file,s.line)},h('td',{style:'color:#ffd000',text:s.type}),h('td',{class:'mono',text:s.file+':'+s.line}),h('td',{class:'mono',text:s.masked}),h('td',{},h('span',{class:'chip',text:'API Key'}))))
+   ):h('p',{text:'✓ No leaked keys or secrets found in the codebase.'})
+ );
+}
+
+function renderFix(){$('#p-fix').replaceChildren(
+  h('h3',{style:'color:#00ff88',text:'🛡️ How to Clean & Protect Your Laravel Application'}),
+  h('ol',{style:'line-height:1.7'},R.remediation.map(x=>h('li',{style:'margin-bottom:12px'},h('b',{style:'font-size:14px;color:var(--t)',text:x.title}),h('div',{class:'muted',style:'margin-top:2px',text:x.detail}))))
+);}
+
+async function renderQuar(){const q=await api('/api/quarantines');$('#p-quar').replaceChildren(
+  h('h3',{style:'color:#00f0ff',text:'📦 Quarantine Vault'}),
+  h('p',{class:'muted',text:'Dangerous files are safely moved out of your web directory and locked with read-only permissions (0400). Nothing is deleted.'}),
+  q.length?q.map(x=>h('div',{class:'fnd'},h('b',{text:x.id}),' · '+x.files.length+' file(s) isolated',h('div',{class:'mono muted',style:'margin:6px 0',text:x.folder}),h('button',{onclick:async()=>{const r=await api('/api/restore',{method:'POST',body:{id:x.id}});alert('Restored '+r.restored+' file(s).'+(r.errors.length?'\n\nErrors:\n'+r.errors.join('\n'):''));renderQuar()}},'↩ Restore Files'))):h('p',{text:'Quarantine vault is currently empty.'})
+);}
+
 let FIND=null,FCAT='all',FQ='';
 function openByPath(path,line){const f=R.files.find(x=>x.path===path);if(f)openFile(f.id,line)}
-async function renderFind(){const p=$('#p-find');if(!FIND){p.replaceChildren(h('p',{class:'muted',text:'Loading…'}));FIND=await api('/api/findings')}
+async function renderFind(){
+ const p=$('#p-find');
+ if(!FIND){p.replaceChildren(h('p',{class:'muted',text:'Loading detections…'}));FIND=await api('/api/findings')}
+ const cats=[['all','All Detections'],['code','Backdoors & WebShells'],['secrets','🔑 Keys & Secrets'],['image','🖼 Image Polyglots'],['config','⚙ Config Issues'],['laravel','Laravel Settings']];
  const CODE=['backdoor','obfuscation','polyglot','c2','seo-spam','js-malware','miner','htaccess'];
- const cats=[['all','All'],['secrets','🔑 Keys & secrets'],['image','🖼 Images (JPG/PNG/GIF/WebP)'],['config','⚙ Config issues'],['laravel','Laravel settings'],['upgrade','⬆ Upgrade'],['code','Code & backdoors']];
  const ok=f=>(FCAT==='all'||(FCAT==='code'?CODE.includes(f.cat):f.cat===FCAT))&&(!FQ||(f.path+' '+f.title+' '+f.snippet).toLowerCase().includes(FQ));
- const rs=FIND.filter(ok);const q=h('input',{type:'text',class:'grow',placeholder:'Filter…',value:FQ});q.oninput=e=>{FQ=e.target.value.toLowerCase();clearTimeout(window._ft);window._ft=setTimeout(renderFind,250)};
- p.replaceChildren(h('div',{class:'row',style:'margin-bottom:10px'},cats.map(([k,l])=>h('button',{class:k===FCAT?'pri':'',onclick:()=>{FCAT=k;renderFind()}},l)),q),
-  h('div',{class:'scroll'},h('table',{},h('thead',{},h('tr',{},h('th',{text:'Severity'}),h('th',{text:'File : line'}),h('th',{text:'Rule'}),h('th',{text:'Finding'}),h('th',{text:'Code / detail'}))),
-  h('tbody',{},rs.slice(0,600).map(f=>h('tr',{class:'f',onclick:()=>openFile(f.id,f.line)},h('td',{},badge(f.sev)),h('td',{class:'mono',text:f.path+(f.line?':'+f.line:'')}),h('td',{class:'mono',text:f.rule}),h('td',{text:f.title}),h('td',{class:'mono muted',text:f.snippet})))))),
-  h('div',{class:'muted',style:'margin-top:8px',text:rs.length+' finding(s)'+(rs.length>600?' - showing the first 600, narrow the filter':'')}))}
-function renderUpg(){$('#p-upg').replaceChildren(h('h3',{text:'Upgrade advisor'}),h('p',{class:'muted',text:'Based on composer.json / composer.lock found in the project. Always confirm support dates on laravel.com/docs/releases and php.net/supported-versions.php.'}),
- h('table',{},h('tr',{},h('th',{text:'Status'}),h('th',{text:'Component'}),h('th',{text:'Current'}),h('th',{text:'Advice'})),R.upgrades.map(u=>h('tr',{},h('td',{},badge(u.sev)),h('td',{text:u.component}),h('td',{class:'mono',text:u.current}),h('td',{text:u.advice})))))}
+ const rs=FIND.filter(ok);
+ const q=h('input',{type:'text',class:'grow',placeholder:'Filter detections…',value:FQ});
+ q.oninput=e=>{FQ=e.target.value.toLowerCase();clearTimeout(window._ft);window._ft=setTimeout(renderFind,200)};
+ p.replaceChildren(
+   h('div',{class:'row',style:'margin-bottom:12px'},cats.map(([k,l])=>h('button',{class:k===FCAT?'pri':'',onclick:()=>{FCAT=k;renderFind()}},l)),q),
+   h('div',{class:'scroll'},h('table',{},
+     h('thead',{},h('tr',{},h('th',{text:'Severity'}),h('th',{text:'File & Line'}),h('th',{text:'Threat Name'}),h('th',{text:'Matching Code Snippet'}))),
+     h('tbody',{},rs.slice(0,600).map(f=>h('tr',{class:'f',onclick:()=>openFile(f.id,f.line)},
+       h('td',{},badge(f.sev)),
+       h('td',{class:'mono',style:'color:#00f0ff',text:f.path+(f.line?':'+f.line:'')}),
+       h('td',{style:'font-weight:600',text:f.title}),
+       h('td',{class:'mono muted',text:f.snippet})
+     )))
+   )),
+   h('div',{class:'muted',style:'margin-top:10px',text:rs.length+' detection(s) found'})
+ );
+}
+
 let mp='';async function mload(p){const d=await api('/api/browse?path='+encodeURIComponent(p));mp=d.path;$('#mpath').textContent=d.path+(d.laravel?'  ✓ Laravel project':'');
  $('#mlist').replaceChildren(h('div',{class:'dir',onclick:()=>mload(d.parent)},'⬆ ..'),...d.dirs.map(x=>h('div',{class:'dir',onclick:()=>mload(d.path+'/'+x.name)},'📁 '+x.name+(x.laravel?'  ✓':''))))}
-$('#browse').onclick=()=>{$('#modal').classList.add('open');mload($('#path').value||'~')};$('#mcancel').onclick=()=>$('#modal').classList.remove('open');$('#muse').onclick=()=>{$('#path').value=mp;$('#modal').classList.remove('open')};
+$('#browse').onclick=()=>{mload($('#path').value||'~');$('#modal').classList.add('open')};
+$('#mcancel').onclick=()=>$('#modal').classList.remove('open');
+$('#muse').onclick=()=>{$('#path').value=mp;$('#modal').classList.remove('open')};
 init();
-</script></body></html>
-"""
+</script>"""
 
 
 def cli_scan(path, a):
@@ -2037,8 +2249,8 @@ def run_gui(path="", autotest=False):
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox
 
-    BG, P, P2, BD, TX, MU = "#000000", "#09090b", "#141416", "#27272a", "#ffffff", "#a1a1aa"
-    SEVC = {"critical": "#ffffff", "high": "#e4e4e7", "medium": "#d4d4d8", "low": "#a1a1aa", "info": "#71717a"}
+    BG, P, P2, BD, TX, MU = "#07090e", "#0d121c", "#131a27", "#1e293b", "#f1f5f9", "#8ea0bc"
+    SEVC = {"critical": "#ff2a5f", "high": "#ff8800", "medium": "#ffd000", "low": "#00d4ff", "info": "#a78bfa"}
     MONO = ("Menlo", 11) if sys.platform == "darwin" else ("Consolas", 10) if os.name == "nt" else ("DejaVu Sans Mono", 10)
     root = tk.Tk()
     root.title("%s %s" % (APP, VERSION))
@@ -2106,7 +2318,7 @@ def run_gui(path="", autotest=False):
             xs.grid(row=1, column=0, sticky="ew")
         fr.rowconfigure(0, weight=1)
         fr.columnconfigure(0, weight=1)
-        tx.tag_configure("hl", background="#4a1d1d")
+        tx.tag_configure("hl", background="#4a1520", foreground="#ff6b8b")
         tx.tag_configure("flash", background="#7a5b00")
         tx.tag_configure("h", foreground="#58a6ff", font=MONO + ("bold",))
         tx.tag_configure("m", foreground=MU)
