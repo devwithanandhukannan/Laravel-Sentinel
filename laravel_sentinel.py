@@ -1610,10 +1610,10 @@ def export_html(res):
     ioc = "".join("<li><code>%s</code> (%d)</li>" % (e(i["value"]), i["count"]) for i in res["iocs"][:100])
     rem = "".join("<li><b>%s</b> - %s</li>" % (e(x["title"]), e(x["detail"])) for x in res["remediation"])
     return ("<!doctype html><meta charset=utf-8><title>Laravel Sentinel report</title><style>body{font:14px system-ui;margin:2em;max-width:1200px}"
-            "table{border-collapse:collapse;width:100%}td{border:1px solid #ccc;padding:6px;vertical-align:top}.critical{background:#ffe3e3}.high{background:#fff0e0}.medium{background:#fffbe0}"
+            "table{border-collapse:collapse;width:100%%}td{border:1px solid #ccc;padding:6px;vertical-align:top}.critical{background:#ffe3e3}.high{background:#fff0e0}.medium{background:#fffbe0}"
             "code{font-size:12px}ul{margin:0;padding-left:1.1em}</style><h1>Laravel Sentinel report</h1><p><b>%s</b> - %s<br>Root: <code>%s</code> · files scanned: %d · flagged: %d</p>"
-            "<h2>Remediation</h2><ol>%s</ol><h2>Indicators of compromise</h2><ul>%s</ul><h2>Flagged files</h2><table>%s</table>"
-            % (e(res["verdict"]["label"]), e(res["verdict"]["text"]), e(res["root"]), res["scanned"], len(res["files"]), rem, ioc, "".join(rows)))
+            "<h2>Remediation</h2><ol>%s</ol><h2>Indicators of compromise</h2><ul>%s</ul><h2>Flagged files</h2><table>%s</table><hr style='margin-top:2em;border:0;border-top:1px solid #ddd'><p style='color:#777;font-size:12px'>Powered by Kneazle · Laravel Sentinel v%s</p>"
+            % (e(res["verdict"]["label"]), e(res["verdict"]["text"]), e(res["root"]), res["scanned"], len(res["files"]), rem, ioc, "".join(rows), VERSION))
 
 
 # ----------------------------------------------------------------------------------------------
@@ -1885,7 +1885,8 @@ pre.dec{background:#000000;border:1px solid var(--b);border-radius:var(--radius)
       <small>Local Malware Scanner &amp; Deep Deobfuscation</small>
     </div>
   </div>
-  <div class="row">
+  <div class="row" style="align-items:center;gap:10px">
+    <span class="chip" style="margin:0;letter-spacing:0.04em;text-transform:uppercase;color:var(--t);border-color:var(--b2)">Powered by Kneazle</span>
     <span class="chip" style="margin:0;letter-spacing:0.04em">READ-ONLY ENGINE</span>
   </div>
 </header>
@@ -1912,65 +1913,10 @@ pre.dec{background:#000000;border:1px solid var(--b);border-radius:var(--radius)
   </div>
   <div id="p-find" class="card hide"></div><div id="p-upg" class="card hide"></div><div id="p-timeline" class="card hide"></div><div id="p-iocs" class="card hide"></div><div id="p-secrets" class="card hide"></div><div id="p-fix" class="card hide"></div><div id="p-quar" class="card hide"></div>
 </div>
-</main>
-<div id="drawer"><div id="dh"><button id="dclose">✕</button><div style="min-width:0"><div id="dtitle" class="mono" style="word-break:break-all"></div></div></div><div id="db"></div></div>
-<div id="modal"><div id="mbox"><div style="padding:12px 14px;border-bottom:1px solid var(--b)" class="row"><b>Choose project folder</b><span id="mpath" class="mono muted" style="flex:1;word-break:break-all"></span></div><div class="l" id="mlist"></div><div class="row" style="padding:12px 14px;border-top:1px solid var(--b);justify-content:flex-end"><button id="mcancel">Cancel</button><button id="muse" class="pri">Use this folder</button></div></div></div>
-#db{padding:16px 18px;overflow:auto;flex:1}
-.src{background:#06080e;border:1px solid var(--b);border-radius:8px;overflow:auto;max-height:68vh}
-.ln{display:flex;white-space:pre;font-family:ui-monospace,Menlo,Monaco,monospace;font-size:12px;line-height:1.45}
-.ln i{color:#475569;min-width:48px;text-align:right;padding:0 12px;font-style:normal;user-select:none;border-right:1px solid #1e293b}
-.ln.hl{background:rgba(244,63,94,0.2)}
-.ln.flash{background:rgba(250,204,21,0.25)}
-.fnd{border:1px solid var(--b);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--p2)}
-.fnd p{margin:6px 0;color:var(--m);font-size:13px}
-pre.dec{background:#06080e;border:1px solid var(--b);border-radius:8px;padding:12px;overflow:auto;max-height:50vh;white-space:pre-wrap;word-break:break-all;font-size:12px;font-family:ui-monospace,Menlo,monospace}
-.chain{color:var(--a);font-weight:600;font-family:ui-monospace,Menlo,monospace;font-size:12px}
-#modal{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:40}
-#modal.open{display:flex}
-#mbox{background:var(--p);border:1px solid var(--b);border-radius:12px;width:680px;max-width:94vw;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5)}
-#mbox .l{overflow:auto;padding:8px 12px;flex:1}
-.dir{padding:7px 10px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .1s}
-.dir:hover{background:var(--p2)}
-.tl{display:flex;align-items:flex-end;gap:3px;height:120px;border-bottom:1px solid var(--b);margin-bottom:12px;padding-top:10px}
-.tl div{flex:1;background:#1e3a5f;min-width:4px;position:relative;border-radius:2px 2px 0 0}
-.tl div i{position:absolute;bottom:0;left:0;right:0;background:var(--crit);border-radius:2px 2px 0 0}
-.muted{color:var(--m)}.hide{display:none}
-</style></head><body>
-<header>
-  <div class="brand">
-    <span class="shield">🛡️</span>
-    <div>
-      <h1>Laravel Sentinel <span class="ver">v2.1</span></h1>
-      <small>Local malware scanner, multi-layer deobfuscator &amp; security triage</small>
-    </div>
-  </div>
-  <div class="row">
-    <span class="chip" style="margin:0;font-size:12px">Read-Only Safety</span>
-  </div>
-</header>
-<main>
-<div class="card">
-  <div class="row"><input id="path" class="grow" type="text" placeholder="/Users/you/Desktop/your-laravel-project"><button id="browse">📁 Browse…</button>
-  <button id="scan" class="pri">▶ Scan project</button><button id="cancel" class="hide">■ Stop</button></div>
-  <div class="row" style="margin-top:10px">
-    <label class="opt"><input type="checkbox" id="deep"> Deep scan JS/assets inside vendor &amp; node_modules (slower)</label>
-    <input id="baseline" type="text" class="grow" style="max-width:360px" placeholder="Optional: folder with a CLEAN vendor/ copy to compare">
-    <input id="custom" type="text" class="grow" style="max-width:300px" placeholder="Extra indicators (comma separated)">
-  </div>
-  <div id="prog" class="hide"><div class="bar"><div id="pbar"></div></div><div class="muted mono" id="ptxt" style="margin-top:6px"></div></div>
-  <div id="err" class="crit hide" style="margin-top:8px"></div>
-</div>
-<div id="out" class="hide">
-  <div id="verdict" class="verdict"></div>
-  <div class="cards" id="cards"></div>
-  <div style="height:14px"></div>
-  <div class="tabs" id="tabs"><div class="tab on" data-t="files">Files</div><div class="tab" data-t="find">All findings (line view)</div><div class="tab" data-t="timeline">Timeline</div><div class="tab" data-t="iocs">Indicators</div><div class="tab" data-t="secrets">Secrets to rotate</div><div class="tab" data-t="fix">Remediation</div><div class="tab" data-t="upg">Upgrade</div><div class="tab" data-t="quar">Quarantine</div></div>
-  <div id="p-files" class="card">
-    <div class="row" style="margin-bottom:10px"><input id="q" type="text" class="grow" placeholder="Filter by path or finding…"><select id="cat"><option value="">All categories</option></select><input id="since" type="date" title="Only files modified on/after"><button id="selhigh">Select Critical + High</button><button id="qbtn" class="danger" disabled>Quarantine selected (0)</button><button id="xj">⬇ JSON</button><button id="xh">⬇ HTML report</button></div>
-    <div class="scroll"><table><thead><tr><th></th><th>Severity</th><th>File</th><th>Why flagged</th><th>Size</th><th>Modified</th></tr></thead><tbody id="rows"></tbody></table></div><div id="more" class="muted" style="margin-top:8px"></div>
-  </div>
-  <div id="p-find" class="card hide"></div><div id="p-upg" class="card hide"></div><div id="p-timeline" class="card hide"></div><div id="p-iocs" class="card hide"></div><div id="p-secrets" class="card hide"></div><div id="p-fix" class="card hide"></div><div id="p-quar" class="card hide"></div>
-</div>
+<footer style="margin-top:48px;padding:20px 0;border-top:1px solid var(--b);display:flex;justify-content:space-between;align-items:center;color:var(--m);font-size:12px;letter-spacing:0.02em">
+  <div>Laravel Sentinel v2.1 &bull; Defensive Malware Triage</div>
+  <div>Powered by <strong style="color:var(--t);letter-spacing:0.04em">Kneazle</strong></div>
+</footer>
 </main>
 <div id="drawer"><div id="dh"><button id="dclose">✕</button><div style="min-width:0"><div id="dtitle" class="mono" style="word-break:break-all"></div></div></div><div id="db"></div></div>
 <div id="modal"><div id="mbox"><div style="padding:12px 14px;border-bottom:1px solid var(--b)" class="row"><b>Choose project folder</b><span id="mpath" class="mono muted" style="flex:1;word-break:break-all"></span></div><div class="l" id="mlist"></div><div class="row" style="padding:12px 14px;border-top:1px solid var(--b);justify-content:flex-end"><button id="mcancel">Cancel</button><button id="muse" class="pri">Use this folder</button></div></div></div>

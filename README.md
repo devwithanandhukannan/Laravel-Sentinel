@@ -1,5 +1,6 @@
 # Laravel Sentinel
 
+> **Powered by Kneazle**  
 > **Local malware scanner, multi-layer deobfuscator, and security triage engine tailored specifically for Laravel applications.**
 
 Zero external dependencies • Standard library only (Python 3.8+) • Safe & strictly read-only scanning
